@@ -1,0 +1,68 @@
+# Agent Instructions
+
+This project uses **bd** (beads) for issue tracking. Run `bd prime` for workflow context.
+
+## Quick Reference
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --status in_progress  # Claim work
+bd close <id>         # Complete work
+bd sync --from-main   # Sync beads from main branch
+```
+
+## Git Workflow
+
+**IMPORTANT: Claude does NOT push to remote. User pushes manually.**
+
+### During Development
+1. After each working change, **ask the user** if they want to commit
+2. If yes, create an intermediate commit with a descriptive message
+3. These intermediate commits will be squashed later
+
+### Intermediate Commits
+```bash
+git add <files>
+git commit -m "WIP: <brief description of change>"
+```
+
+### Milestone Completion
+When a milestone is complete:
+1. Squash all intermediate commits into one clean commit
+2. Use a clear, comprehensive commit message:
+   ```
+   feat(M1): Basic Switch with LED Indicator
+
+   - Set up esp-matter project structure
+   - Implemented WS2812 LED driver with GPIO 19 power enable
+   - Created on_off_plug_in_unit Matter endpoint
+   - Added button toggle for on/off control
+   - LED indicator reflects switch state
+   ```
+3. Run `bd sync --from-main` to sync beads
+4. Notify user that milestone is ready for manual push
+
+### Commit Message Format
+- `feat(Mx):` - New feature for milestone x
+- `fix(Mx):` - Bug fix for milestone x
+- `refactor(Mx):` - Code refactoring
+- `docs:` - Documentation changes
+- `WIP:` - Work in progress (intermediate commits)
+
+## Session Close Protocol
+
+Before ending a session:
+1. `git status` - Check uncommitted changes
+2. If working code exists, ask user about committing
+3. `bd sync --from-main` - Sync beads updates
+4. `bd list` - Show current issue status
+5. Summarize what was done and what's next
+
+**DO NOT run `git push` - user will push manually.**
+
+## Issue Tracking with bd
+
+- Use `bd` for milestone/feature tracking (multi-session, dependencies)
+- Use `TodoWrite` for detailed sub-tasks within a session
+- Close bd issues only when milestone is fully complete
