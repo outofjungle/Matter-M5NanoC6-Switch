@@ -26,7 +26,7 @@ using namespace chip::app::Clusters;
 using namespace esp_matter;
 
 static const char *TAG = "app_driver";
-static led_strip_t *s_led_strip = NULL;
+led_strip_t *s_led_strip = NULL;  // Exported for app_reset LED control
 static TimerHandle_t s_identify_timer = NULL;
 static bool s_identify_blink_state = false;
 

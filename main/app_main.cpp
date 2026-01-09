@@ -204,12 +204,12 @@ extern "C" void app_main()
     s_switch_endpoint_id = endpoint::get_id(endpoint);
     ESP_LOGI(TAG, "Created on_off_plug_in_unit endpoint with ID %d", s_switch_endpoint_id);
 
-    // Initialize button and register toggle callback
+    // Initialize button and register callbacks
     s_button_handle = app_driver_button_init();
     if (s_button_handle) {
         iot_button_register_cb((button_handle_t)s_button_handle, BUTTON_SINGLE_CLICK, button_toggle_cb, NULL);
         app_reset_button_register(s_button_handle);
-        ESP_LOGI(TAG, "Button initialized with toggle and reset callbacks");
+        ESP_LOGI(TAG, "Button initialized with toggle and factory reset callbacks");
     }
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
