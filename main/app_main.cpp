@@ -227,6 +227,13 @@ extern "C" void app_main()
 
     ESP_LOGI(TAG, "M5NanoC6 Matter Switch started");
 
+    // Log commissioning info (test values from CONFIG_ENABLE_TEST_SETUP_PARAMS)
+    ESP_LOGI(TAG, "=== Commissioning Info ===");
+    ESP_LOGI(TAG, "QR Code:     MT:Y.K9042C00KA0648G00");
+    ESP_LOGI(TAG, "Manual Code: 34970112332");
+    ESP_LOGI(TAG, "Discriminator: 3840, Passcode: 20202021");
+    ESP_LOGI(TAG, "==========================");
+
 #if CONFIG_ENABLE_CHIP_SHELL
     esp_matter::console::diagnostics_register_commands();
     esp_matter::console::wifi_register_commands();
