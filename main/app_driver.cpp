@@ -17,6 +17,8 @@
 #include <led_strip.h>
 #include <iot_button.h>
 #include <button_gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
 
 #include <app_priv.h>
 
@@ -25,6 +27,8 @@ using namespace esp_matter;
 
 static const char *TAG = "app_driver";
 static led_strip_t *s_led_strip = NULL;
+static TimerHandle_t s_identify_timer = NULL;
+static bool s_identify_blink_state = false;
 
 app_driver_handle_t app_driver_led_init(void)
 {
@@ -132,4 +136,49 @@ esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_
     }
 
     return err;
+}
+
+// Timer callback for identify blink
+static void identify_timer_cb(TimerHandle_t timer)
+{
+    if (!s_led_strip) {
+        return;
+    }
+
+    s_identify_blink_state = !s_identify_blink_state;
+    if (s_identify_blink_state) {
+        // Blink ON - white flash
+        s_led_strip->set_pixel(s_led_strip, 0, 128, 128, 128);
+    } else {
+        // Blink OFF
+        s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);
+    }
+    s_led_strip->refresh(s_led_strip, 100);
+}
+
+esp_err_t app_driver_led_identify_start(void)
+{
+    ESP_LOGI(TAG, "Starting identify blink");
+
+    if (!s_identify_timer) {
+        s_identify_timer = xTimerCreate("identify", pdMS_TO_TICKS(500), pdTRUE, NULL, identify_timer_cb);
+    }
+
+    if (s_identify_timer) {
+        xTimerStart(s_identify_timer, 0);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t app_driver_led_identify_stop(bool current_power)
+{
+    ESP_LOGI(TAG, "Stopping identify blink");
+
+    if (s_identify_timer) {
+        xTimerStop(s_identify_timer, 0);
+    }
+
+    // Restore normal LED state
+    return app_driver_led_set_power(NULL, current_power);
 }

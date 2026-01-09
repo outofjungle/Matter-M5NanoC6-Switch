@@ -67,6 +67,24 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power);
 esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
                                       uint32_t attribute_id, esp_matter_attr_val_t *val);
 
+/** Start LED identify blink pattern
+ *
+ * Blinks the LED to identify the device during commissioning.
+ *
+ * @return ESP_OK on success.
+ */
+esp_err_t app_driver_led_identify_start(void);
+
+/** Stop LED identify blink pattern
+ *
+ * Stops the blink and restores normal LED state.
+ *
+ * @param[in] current_power Current on/off state to restore.
+ *
+ * @return ESP_OK on success.
+ */
+esp_err_t app_driver_led_identify_stop(bool current_power);
+
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()                                           \
     {                                                                                   \

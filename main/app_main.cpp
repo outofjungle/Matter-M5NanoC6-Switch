@@ -113,6 +113,23 @@ static esp_err_t app_identification_cb(identification::callback_type_t type, uin
                                        uint8_t effect_variant, void *priv_data)
 {
     ESP_LOGI(TAG, "Identification callback: type: %u, effect: %u, variant: %u", type, effect_id, effect_variant);
+
+    if (type == identification::callback_type_t::START || type == identification::callback_type_t::EFFECT) {
+        app_driver_led_identify_start();
+    } else if (type == identification::callback_type_t::STOP) {
+        // Get current OnOff state to restore LED
+        bool current_power = false;
+        if (s_switch_endpoint_id != 0) {
+            esp_matter_attr_val_t val = esp_matter_invalid(NULL);
+            attribute_t *attr = attribute::get(s_switch_endpoint_id, OnOff::Id, OnOff::Attributes::OnOff::Id);
+            if (attr) {
+                attribute::get_val(attr, &val);
+                current_power = val.val.b;
+            }
+        }
+        app_driver_led_identify_stop(current_power);
+    }
+
     return ESP_OK;
 }
 

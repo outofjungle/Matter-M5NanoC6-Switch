@@ -50,6 +50,8 @@ When a milestone is complete:
 - `docs:` - Documentation changes
 - `WIP:` - Work in progress (intermediate commits)
 
+**DO NOT add `Co-Authored-By: Claude` to commit messages.**
+
 ## Session Close Protocol
 
 Before ending a session:
