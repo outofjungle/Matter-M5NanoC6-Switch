@@ -187,8 +187,10 @@ extern "C" void app_main()
         ESP_LOGE(TAG, "Failed to initialize LED driver");
     }
 
-    // Create Matter node
+    // Create Matter node with custom device name
     node::config_t node_config;
+    strncpy(node_config.root_node.basic_information.node_label, "M5NanoC6 Switch",
+            sizeof(node_config.root_node.basic_information.node_label) - 1);
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);
     ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
 
