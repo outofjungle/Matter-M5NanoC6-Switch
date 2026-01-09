@@ -187,8 +187,9 @@ extern "C" void app_main()
         ESP_LOGE(TAG, "Failed to initialize LED driver");
     }
 
-    // Create Matter node with custom device name
+    // Create Matter node (product name set via CHIPProjectConfig.h)
     node::config_t node_config;
+    // Set default NodeLabel (user-configurable label after commissioning)
     strncpy(node_config.root_node.basic_information.node_label, "M5NanoC6 Switch",
             sizeof(node_config.root_node.basic_information.node_label) - 1);
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);

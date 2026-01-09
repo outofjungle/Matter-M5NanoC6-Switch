@@ -4,6 +4,9 @@
 # Target
 CONFIG_IDF_TARGET="esp32c6"
 
+# Custom CHIP project config for device naming
+CONFIG_CHIP_PROJECT_CONFIG="main/include/CHIPProjectConfig.h"
+
 # Flash size
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
