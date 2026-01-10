@@ -162,7 +162,7 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
     esp_err_t err = ESP_OK;
 
     if (type == PRE_UPDATE) {
-        app_driver_handle_t driver_handle = (app_driver_handle_t)priv_data;
+        auto driver_handle = static_cast<app_driver_handle_t>(priv_data);
         err = app_driver_attribute_update(driver_handle, endpoint_id, cluster_id, attribute_id, val);
     }
 
@@ -210,15 +210,16 @@ extern "C" void app_main()
     }
 
     // Create Matter node (product name set via CHIPProjectConfig.h)
-    node::config_t node_config;
+    node::config_t node_config = {};  // Zero-initialize all members
     // Set default NodeLabel (user-configurable label after commissioning)
     strncpy(node_config.root_node.basic_information.node_label, "M5NanoC6 Switch",
             sizeof(node_config.root_node.basic_information.node_label) - 1);
+    node_config.root_node.basic_information.node_label[sizeof(node_config.root_node.basic_information.node_label) - 1] = '\0';
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);
     ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
 
     // Create on_off_plug_in_unit endpoint
-    on_off_plug_in_unit::config_t plug_config;
+    on_off_plug_in_unit::config_t plug_config = {};  // Zero-initialize all members
     plug_config.on_off.on_off = false;  // Start in OFF state
     endpoint_t *endpoint = on_off_plug_in_unit::create(node, &plug_config, ENDPOINT_FLAG_NONE, s_led_handle);
     ABORT_APP_ON_FAILURE(endpoint != nullptr, ESP_LOGE(TAG, "Failed to create plug endpoint"));
@@ -235,7 +236,7 @@ extern "C" void app_main()
     // Initialize button and register callbacks
     s_button_handle = app_driver_button_init();
     if (s_button_handle) {
-        iot_button_register_cb((button_handle_t)s_button_handle, BUTTON_SINGLE_CLICK, button_toggle_cb, NULL);
+        iot_button_register_cb(static_cast<button_handle_t>(s_button_handle), BUTTON_SINGLE_CLICK, button_toggle_cb, NULL);
         app_reset_button_register(s_button_handle);
         ESP_LOGI(TAG, "Button initialized with toggle and factory reset callbacks");
     }

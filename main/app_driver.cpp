@@ -19,6 +19,7 @@
 #include <iot_button.h>
 #include <button_gpio.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/timers.h>
 
 #include <app_priv.h>
@@ -29,8 +30,14 @@ using namespace esp_matter;
 static const char *TAG = "app_driver";
 
 static led_strip_t *s_led_strip = NULL;
+static SemaphoreHandle_t s_led_mutex = NULL;
 static TimerHandle_t s_identify_timer = NULL;
 static std::atomic<bool> s_identify_blink_state{false};
+
+// Helper macro for LED mutex lock/unlock with timeout
+#define LED_MUTEX_TIMEOUT_MS 50
+#define LED_LOCK() (s_led_mutex && xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(LED_MUTEX_TIMEOUT_MS)) == pdTRUE)
+#define LED_UNLOCK() do { if (s_led_mutex) xSemaphoreGive(s_led_mutex); } while(0)
 
 // Forward declaration for timer callback
 static void identify_timer_cb(TimerHandle_t timer);
@@ -50,7 +57,7 @@ app_driver_handle_t app_driver_led_init(void)
         ESP_LOGE(TAG, "GPIO config failed: %d", err);
         return NULL;
     }
-    err = gpio_set_level((gpio_num_t)M5NANOC6_LED_POWER_GPIO, 1);
+    err = gpio_set_level(static_cast<gpio_num_t>(M5NANOC6_LED_POWER_GPIO), 1);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "GPIO set level failed: %d", err);
         return NULL;
@@ -58,7 +65,8 @@ app_driver_handle_t app_driver_led_init(void)
     ESP_LOGI(TAG, "Enabled WS2812 power on GPIO %d", M5NANOC6_LED_POWER_GPIO);
 
     // Configure RMT for WS2812
-    rmt_config_t rmt_cfg = RMT_DEFAULT_CONFIG_TX((gpio_num_t)M5NANOC6_LED_DATA_GPIO, (rmt_channel_t)M5NANOC6_RMT_CHANNEL);
+    rmt_config_t rmt_cfg = RMT_DEFAULT_CONFIG_TX(static_cast<gpio_num_t>(M5NANOC6_LED_DATA_GPIO),
+                                                  static_cast<rmt_channel_t>(M5NANOC6_RMT_CHANNEL));
     rmt_cfg.clk_div = 2;
 
     err = rmt_config(&rmt_cfg);
@@ -74,11 +82,18 @@ app_driver_handle_t app_driver_led_init(void)
     }
 
     // Create LED strip using RMT
-    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(1, (led_strip_dev_t)rmt_cfg.channel);
+    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(1, reinterpret_cast<led_strip_dev_t>(rmt_cfg.channel));
     s_led_strip = led_strip_new_rmt_ws2812(&strip_config);
     if (!s_led_strip) {
         ESP_LOGE(TAG, "Failed to create WS2812 LED strip");
+        rmt_driver_uninstall(rmt_cfg.channel);  // Cleanup on failure
         return NULL;
+    }
+
+    // Create mutex for thread-safe LED access
+    s_led_mutex = xSemaphoreCreateMutex();
+    if (!s_led_mutex) {
+        ESP_LOGW(TAG, "Failed to create LED mutex");
     }
 
     // Set initial LED state (off = dim blue)
@@ -92,7 +107,7 @@ app_driver_handle_t app_driver_led_init(void)
     }
 
     ESP_LOGI(TAG, "LED driver initialized on GPIO %d", M5NANOC6_LED_DATA_GPIO);
-    return (app_driver_handle_t)s_led_strip;
+    return static_cast<app_driver_handle_t>(s_led_strip);
 }
 
 app_driver_handle_t app_driver_button_init(void)
@@ -115,7 +130,7 @@ app_driver_handle_t app_driver_button_init(void)
     }
 
     ESP_LOGI(TAG, "Button initialized on GPIO %d", M5NANOC6_BUTTON_GPIO);
-    return (app_driver_handle_t)btn_handle;
+    return static_cast<app_driver_handle_t>(btn_handle);
 }
 
 esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power)
@@ -127,6 +142,11 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power)
         return ESP_ERR_INVALID_STATE;
     }
 
+    if (!LED_LOCK()) {
+        ESP_LOGW(TAG, "LED mutex timeout");
+        return ESP_ERR_TIMEOUT;
+    }
+
     if (power) {
         // ON state = bright blue
         s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_ON_G, LED_COLOR_ON_R, LED_COLOR_ON_B);
@@ -136,13 +156,20 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power)
     }
 
     s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+    LED_UNLOCK();
+
     ESP_LOGD(TAG, "LED set to %s", power ? "ON" : "OFF");
     return ESP_OK;
 }
 
 esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
-                                      uint32_t attribute_id, esp_matter_attr_val_t *val)
+                                      uint32_t attribute_id, const esp_matter_attr_val_t *val)
 {
+    if (!val) {
+        ESP_LOGE(TAG, "Attribute value is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     esp_err_t err = ESP_OK;
 
     if (cluster_id == OnOff::Id) {
@@ -158,7 +185,7 @@ esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_
 // Timer callback for identify blink
 static void identify_timer_cb(TimerHandle_t timer)
 {
-    if (!s_led_strip) {
+    if (!s_led_strip || !LED_LOCK()) {
         return;
     }
 
@@ -171,17 +198,21 @@ static void identify_timer_cb(TimerHandle_t timer)
         s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);
     }
     s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+    LED_UNLOCK();
 }
 
 esp_err_t app_driver_led_identify_start(void)
 {
     ESP_LOGI(TAG, "Starting identify blink");
 
-    if (s_identify_timer) {
-        xTimerStart(s_identify_timer, 0);
-    } else {
+    if (!s_identify_timer) {
         ESP_LOGW(TAG, "Identify timer not initialized");
         return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xTimerStart(s_identify_timer, pdMS_TO_TICKS(100)) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to start identify timer");
+        return ESP_FAIL;
     }
 
     return ESP_OK;
@@ -192,7 +223,8 @@ esp_err_t app_driver_led_identify_stop(bool current_power)
     ESP_LOGI(TAG, "Stopping identify blink");
 
     if (s_identify_timer) {
-        xTimerStop(s_identify_timer, 0);
+        // Use timeout to ensure command is processed
+        xTimerStop(s_identify_timer, pdMS_TO_TICKS(100));
     }
 
     // Restore normal LED state
@@ -202,4 +234,14 @@ esp_err_t app_driver_led_identify_stop(bool current_power)
 led_strip_t *app_driver_get_led_strip(void)
 {
     return s_led_strip;
+}
+
+bool app_driver_led_lock(void)
+{
+    return LED_LOCK();
+}
+
+void app_driver_led_unlock(void)
+{
+    LED_UNLOCK();
 }

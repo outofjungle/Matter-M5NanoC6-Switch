@@ -43,6 +43,10 @@
 #define LED_REFRESH_TIMEOUT_MS      100
 #define LED_RESET_UPDATE_MS         100     // Reset countdown LED update rate
 
+// Reset blink rate configuration (blink speeds up as progress increases)
+#define LED_RESET_BLINK_START_MS    1000    // Initial blink period at 0% progress
+#define LED_RESET_BLINK_END_MS      200     // Final blink period at 100% progress
+
 typedef void *app_driver_handle_t;
 
 /** Initialize the WS2812 LED indicator
@@ -86,7 +90,7 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power);
  * @return ESP_OK on success.
  */
 esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
-                                      uint32_t attribute_id, esp_matter_attr_val_t *val);
+                                      uint32_t attribute_id, const esp_matter_attr_val_t *val);
 
 /** Start LED identify blink pattern
  *
@@ -109,7 +113,23 @@ esp_err_t app_driver_led_identify_stop(bool current_power);
 /** Get LED strip handle for direct access
  *
  * Used by app_reset for LED control during factory reset countdown.
+ * IMPORTANT: Caller must use app_driver_led_lock/unlock for thread safety.
  *
  * @return LED strip pointer, or NULL if not initialized.
  */
 struct led_strip_s *app_driver_get_led_strip(void);
+
+/** Lock LED strip for exclusive access
+ *
+ * Must be called before directly accessing the LED strip via app_driver_get_led_strip().
+ * Uses a 50ms timeout to avoid deadlock.
+ *
+ * @return true if lock acquired, false on timeout.
+ */
+bool app_driver_led_lock(void);
+
+/** Unlock LED strip after exclusive access
+ *
+ * Must be called after LED operations are complete.
+ */
+void app_driver_led_unlock(void);
