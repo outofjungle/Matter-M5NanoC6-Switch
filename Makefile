@@ -2,7 +2,8 @@
 # ESP32-C6 Matter device using esp-matter SDK
 
 .PHONY: all build clean fullclean erase flash monitor flash-monitor \
-        menuconfig size size-components get-mac help check-env
+        menuconfig size size-components get-mac help check-env \
+        generate-pairing
 
 # Default target
 all: build
@@ -111,6 +112,21 @@ get-mac: ## Display connected device MAC address
 		exit 1; \
 	fi
 	@esptool.py --port $(PORT) chip_id 2>/dev/null | grep -E 'MAC:|Chip is'
+
+#------------------------------------------------------------------------------
+# Pairing Configuration
+#------------------------------------------------------------------------------
+
+PAIRING_CONFIG := main/include/CHIPPairingConfig.h
+PAIRING_QR_IMAGE := pairing_qr.png
+
+generate-pairing: ## Generate random pairing code, update config, and create QR image
+	@python3 -c "import random; \
+invalid={0,11111111,22222222,33333333,44444444,55555555,66666666,77777777,88888888,99999999,12345678,87654321}; \
+d=random.randint(0,4095); \
+p=random.randint(1,99999999); \
+exec('while p in invalid: p=random.randint(1,99999999)'); \
+print(f'{d} {p}')" | xargs -n2 sh -c 'python3 scripts/generate_pairing_config.py -d $$0 -p $$1 -o $(PAIRING_CONFIG) --qr-image $(PAIRING_QR_IMAGE)'
 
 #------------------------------------------------------------------------------
 # Help

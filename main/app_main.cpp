@@ -27,6 +27,8 @@
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
 
+#include "include/CHIPProjectConfig.h"
+
 static const char *TAG = "app_main";
 
 using namespace esp_matter;
@@ -228,11 +230,15 @@ extern "C" void app_main()
 
     ESP_LOGI(TAG, "M5NanoC6 Matter Switch started");
 
-    // Log commissioning info (test values from CONFIG_ENABLE_TEST_SETUP_PARAMS)
+    // Log commissioning info from CHIPProjectConfig.h
+    // To change these values, edit main/include/CHIPProjectConfig.h
+    // and regenerate using: python3 scripts/generate_pairing_config.py
     ESP_LOGI(TAG, "=== Commissioning Info ===");
-    ESP_LOGI(TAG, "QR Code:     MT:Y.K9042C00KA0648G00");
-    ESP_LOGI(TAG, "Manual Code: 34970112332");
-    ESP_LOGI(TAG, "Discriminator: 3840, Passcode: 20202021");
+    ESP_LOGI(TAG, "Discriminator: %d (0x%03X)",
+             CHIP_DEVICE_CONFIG_USE_TEST_SETUP_DISCRIMINATOR,
+             CHIP_DEVICE_CONFIG_USE_TEST_SETUP_DISCRIMINATOR);
+    ESP_LOGI(TAG, "Passcode: %d", CHIP_DEVICE_CONFIG_USE_TEST_SETUP_PIN_CODE);
+    ESP_LOGI(TAG, "Run 'scripts/generate_pairing_config.py' for QR code");
     ESP_LOGI(TAG, "==========================");
 
 #if CONFIG_ENABLE_CHIP_SHELL

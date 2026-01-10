@@ -45,3 +45,6 @@ ENV/
 # Logs
 logs/
 *.log
+
+# Generated pairing QR code
+pairing_qr.png
