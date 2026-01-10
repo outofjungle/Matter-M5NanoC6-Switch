@@ -68,16 +68,20 @@ esp-matter-mfg-tool \
 
 ### QR Code Generation
 
+**This project uses a custom script:**
+
 ```bash
-# Using generate_setup_payload.py
-python3 generate_setup_payload.py \
-    --discriminator 3840 \
-    --passcode 20202021 \
-    --vendor-id 65521 \
-    --product-id 32768 \
-    --commissioning-flow 0 \
-    --discovery-cap-bitmask 2
+# Generate random pairing code and QR image
+make generate-pairing
+
+# Or with specific values:
+python3 scripts/generate_pairing_config.py \
+    -d 3840 -p 20202021 \
+    -o main/include/CHIPPairingConfig.h \
+    --qr-image pairing_qr.png
 ```
+
+The script generates the SPAKE2+ verifier automatically.
 
 ---
 

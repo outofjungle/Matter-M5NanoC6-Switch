@@ -1,30 +1,26 @@
 # Matter M5NanoC6 Switch
 
-ESP32-C6 Matter-enabled push button toggle switch using esp-matter SDK.
+ESP32-C6 Matter-enabled switch using esp-matter SDK with Thread networking.
 
-## Description
+## Features
 
-A simple push button toggle switch with the following capabilities:
+- **Toggle Control**: Button press toggles ON/OFF state
+- **Matter Integration**: State syncs with Matter fabric
+- **LED Indicator**: WS2812 LED shows state (bright blue=ON, dim blue=OFF)
+- **Factory Reset**: Hold button 20 seconds to reset
+- **Configurable Pairing**: Generate unique QR codes per device
 
-* **Toggle Control**: Press button to toggle state between ON and OFF
-* **Matter Integration**: State changes are reported to the Matter network
-* **Indicator LED**: WS2812 RGB LED shows switch state (green=ON, red=OFF)
-* **Factory Reset**: Long press button to trigger factory reset
-* **Matter Data Model**:
-  * **Device Type**: `On/Off Plug-in Unit` (0x010A)
-  * **Network**: Thread (802.15.4)
+**Matter Device Type**: On/Off Plug-in Unit (0x010A) over Thread
 
 ## Hardware
 
-* **Devkit**: [M5Stack Nano C6 Dev Kit](https://shop.m5stack.com/products/m5stack-nanoc6-dev-kit)
+[M5Stack Nano C6 Dev Kit](https://shop.m5stack.com/products/m5stack-nanoc6-dev-kit)
 
-### Pin Assignment
-
-| Peripheral    | GPIO Pin | Function                        |
-|---------------|----------|---------------------------------|
-| Button        | GPIO 9   | Built-in button (active low)    |
-| LED Data      | GPIO 20  | WS2812 RGB LED data             |
-| LED Power     | GPIO 19  | WS2812 power enable             |
+| Peripheral | GPIO | Function |
+|------------|------|----------|
+| Button     | 9    | Active low |
+| LED Data   | 20   | WS2812 data |
+| LED Power  | 19   | WS2812 enable |
 
 ## Prerequisites
 
@@ -37,12 +33,9 @@ A simple push button toggle switch with the following capabilities:
 ### 1. Install ESP-IDF
 
 ```bash
-mkdir -p ~/Workspace/ESP
 cd ~/Workspace/ESP
-
 git clone -b release/v5.3 --recursive https://github.com/espressif/esp-idf.git
-cd esp-idf
-./install.sh esp32c6
+cd esp-idf && ./install.sh esp32c6
 ```
 
 ### 2. Install esp-matter
@@ -50,63 +43,63 @@ cd esp-idf
 ```bash
 cd ~/Workspace/ESP
 git clone --recursive https://github.com/espressif/esp-matter.git
-cd esp-matter
-./install.sh
+cd esp-matter && ./install.sh
 ```
 
 ### 3. Environment Variables
 
-Add to your shell profile (`~/.config/fish/config.fish` for fish, or `~/.zshrc`/`~/.bashrc`):
+Add to shell profile:
 
 ```bash
-# ESP-IDF and ESP-Matter
 export IDF_PATH=~/Workspace/ESP/esp-idf
 export ESP_MATTER_PATH=~/Workspace/ESP/esp-matter
 export _PW_ACTUAL_ENVIRONMENT_ROOT=$ESP_MATTER_PATH/connectedhomeip/connectedhomeip/.environment
-
-# Pigweed tools (for Matter builds)
 export PATH=$_PW_ACTUAL_ENVIRONMENT_ROOT/cipd/packages/pigweed:$PATH
 export PATH=$_PW_ACTUAL_ENVIRONMENT_ROOT/cipd/packages/pigweed/bin:$PATH
 ```
 
-Activate ESP-IDF tools (once per terminal):
+Activate ESP-IDF (once per terminal):
 ```bash
-source $IDF_PATH/export.sh    # bash/zsh
-# OR
-source $IDF_PATH/export.fish  # fish
+source $IDF_PATH/export.sh
 ```
 
 ## Build and Flash
 
 ```bash
-cd ~/Workspace/Matter-M5NanoC6-Switch
-
-# Build
-idf.py build
-
-# Flash and monitor
-idf.py -p /dev/cu.usbmodem* flash monitor
+make build      # Build firmware
+make flash      # Flash to device
+make monitor    # Serial monitor (Ctrl+] to exit)
 ```
 
-### Available Make Targets
+### All Make Targets
 
 ```bash
-make build          # Build firmware
-make flash          # Flash to device
-make monitor        # Serial monitor
-make flash-monitor  # Flash and monitor
-make clean          # Clean build
-make erase          # Erase flash
-make menuconfig     # SDK configuration
+make build            # Build firmware
+make clean            # Clean build artifacts
+make fullclean        # Full clean (build, sdkconfig, deps)
+make menuconfig       # SDK configuration
+make flash            # Flash firmware
+make monitor          # Serial monitor
+make erase            # Erase flash (factory reset)
+make generate-pairing # Generate random pairing code and QR
 ```
 
 ## Commissioning
 
-**Manual Pairing Code:** `34970112332`
+Generate a unique pairing code:
 
-Or use:
-- **Passcode:** `20202021`
-- **Discriminator:** `3840`
+```bash
+make generate-pairing
+```
+
+This creates:
+- `main/include/CHIPPairingConfig.h` - Pairing configuration
+- `pairing_qr.png` - QR code image for commissioning
+
+Rebuild after generating:
+```bash
+make build && make flash
+```
 
 The device is discoverable via BLE during commissioning.
 
@@ -114,44 +107,22 @@ The device is discoverable via BLE during commissioning.
 
 ```
 Matter-M5NanoC6-Switch/
-├── CMakeLists.txt          # Project build configuration
-├── Makefile                # Build automation
-├── sdkconfig.defaults      # SDK configuration
-├── partitions.csv          # Flash partition table
+├── CMakeLists.txt
+├── Makefile
+├── sdkconfig.defaults
+├── partitions.csv
+├── scripts/
+│   └── generate_pairing_config.py
 └── main/
-    ├── CMakeLists.txt      # Component configuration
-    ├── app_main.cpp        # Application entry point
-    ├── app_driver.cpp      # LED and button drivers
-    ├── app_priv.h          # GPIO definitions
-    ├── app_reset.cpp       # Factory reset handler
-    └── app_reset.h         # Factory reset interface
-```
-
-## Code Overview
-
-### Initialization (app_main.cpp)
-
-1. Initialize NVS flash
-2. Create Matter node with `on_off_plug_in_unit` endpoint
-3. Register attribute update callback
-4. Initialize LED driver (WS2812)
-5. Initialize button with callbacks:
-   - Single click: Toggle on/off state
-   - Long press: Factory reset
-
-### Hardware Drivers (app_driver.cpp)
-
-* `app_driver_led_init()` - Initialize WS2812 LED with RMT driver
-* `app_driver_led_set_power()` - Set LED color (green=ON, red=OFF)
-* `app_driver_button_init()` - Initialize button with iot_button
-* `app_driver_attribute_update()` - Handle Matter attribute changes
-
-### GPIO Configuration (app_priv.h)
-
-```cpp
-#define M5NANOC6_BUTTON_GPIO      9
-#define M5NANOC6_LED_DATA_GPIO    20
-#define M5NANOC6_LED_POWER_GPIO   19
+    ├── CMakeLists.txt
+    ├── app_main.cpp          # Entry point, Matter setup
+    ├── app_driver.cpp        # LED and button drivers
+    ├── app_priv.h            # GPIO definitions
+    ├── app_reset.cpp         # Factory reset handler
+    ├── app_reset.h
+    └── include/
+        ├── CHIPProjectConfig.h   # Device naming
+        └── CHIPPairingConfig.h   # Pairing config (generated)
 ```
 
 ## Troubleshooting
@@ -169,4 +140,4 @@ ls /dev/ttyUSB*        # Linux
 ```
 
 ### Factory Reset
-Hold button for 5+ seconds until reset triggers.
+Hold button for 20 seconds. LED blinks red with increasing speed during countdown.
