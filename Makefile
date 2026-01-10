@@ -11,7 +11,8 @@ all: build
 #------------------------------------------------------------------------------
 
 TARGET := esp32c6
-PORT ?= $(shell ls /dev/cu.usbmodem* 2>/dev/null | head -1)
+# Auto-detect serial port (macOS: cu.usbmodem*, Linux: ttyUSB* or ttyACM*)
+PORT ?= $(shell ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1)
 
 # Pairing configuration
 PAIRING_CONFIG := main/include/CHIPPairingConfig.h

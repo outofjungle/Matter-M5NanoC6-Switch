@@ -27,7 +27,7 @@ except ImportError:
 # Add CHIP SDK paths - try multiple locations
 POSSIBLE_ESP_MATTER_PATHS = [
     os.environ.get('ESP_MATTER_PATH', ''),
-    '/Users/ven/Workspace/ESP/esp-matter',
+    os.path.expanduser('~/esp/esp-matter'),
     os.path.expanduser('~/Workspace/ESP/esp-matter'),
 ]
 

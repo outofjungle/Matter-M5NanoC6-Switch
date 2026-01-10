@@ -12,15 +12,36 @@
 #include <esp_err.h>
 #include <esp_matter.h>
 
-#if CHIP_DEVICE_CONFIG_ENABLE_THREAD
-#include "esp_openthread_types.h"
-#endif
-
 // M5NanoC6 GPIO Configuration
 #define M5NANOC6_BUTTON_GPIO        9
 #define M5NANOC6_LED_DATA_GPIO      20
 #define M5NANOC6_LED_POWER_GPIO     19
 #define M5NANOC6_RMT_CHANNEL        0
+
+// LED Color Configuration (GRB order for WS2812)
+// Format: LED_COLOR_<STATE>_<CHANNEL> where channel is G, R, or B
+#define LED_COLOR_ON_G              0
+#define LED_COLOR_ON_R              0
+#define LED_COLOR_ON_B              128     // Bright blue
+
+#define LED_COLOR_OFF_G             0
+#define LED_COLOR_OFF_R             0
+#define LED_COLOR_OFF_B             20      // Dim blue
+
+#define LED_COLOR_IDENTIFY_G        128     // White flash
+#define LED_COLOR_IDENTIFY_R        128
+#define LED_COLOR_IDENTIFY_B        128
+
+// LED Color Configuration - Factory Reset (red)
+#define LED_COLOR_RESET_G           0       // Red only (GRB order)
+#define LED_COLOR_RESET_R_MIN       50      // Starting intensity
+#define LED_COLOR_RESET_R_MAX       255     // Final intensity
+#define LED_COLOR_RESET_B           0
+
+// LED Timing Configuration
+#define LED_IDENTIFY_BLINK_MS       500
+#define LED_REFRESH_TIMEOUT_MS      100
+#define LED_RESET_UPDATE_MS         100     // Reset countdown LED update rate
 
 typedef void *app_driver_handle_t;
 
@@ -43,7 +64,7 @@ app_driver_handle_t app_driver_button_init(void);
 /** Set LED indicator state
  *
  * Updates the WS2812 LED to reflect the on/off state.
- * ON = Green, OFF = Red (dim)
+ * ON = bright blue, OFF = dim blue
  *
  * @param[in] handle LED driver handle.
  * @param[in] power true = on, false = off.
@@ -85,19 +106,10 @@ esp_err_t app_driver_led_identify_start(void);
  */
 esp_err_t app_driver_led_identify_stop(bool current_power);
 
-#if CHIP_DEVICE_CONFIG_ENABLE_THREAD
-#define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()                                           \
-    {                                                                                   \
-        .radio_mode = RADIO_MODE_NATIVE,                                                \
-    }
-
-#define ESP_OPENTHREAD_DEFAULT_HOST_CONFIG()                                            \
-    {                                                                                   \
-        .host_connection_mode = HOST_CONNECTION_MODE_NONE,                              \
-    }
-
-#define ESP_OPENTHREAD_DEFAULT_PORT_CONFIG()                                            \
-    {                                                                                   \
-        .storage_partition_name = "nvs", .netif_queue_size = 10, .task_queue_size = 10, \
-    }
-#endif
+/** Get LED strip handle for direct access
+ *
+ * Used by app_reset for LED control during factory reset countdown.
+ *
+ * @return LED strip pointer, or NULL if not initialized.
+ */
+struct led_strip_s *app_driver_get_led_strip(void);

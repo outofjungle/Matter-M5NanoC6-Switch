@@ -1,5 +1,17 @@
 # Name,   Type, SubType, Offset,  Size, Flags
 # Note: Firmware partition offset needs to be 64K aligned, initial 36K (9 sectors) are reserved for bootloader and partition table
+#
+# Partition layout for 4MB flash:
+#   0x00000 - 0x0CFFF: Bootloader + partition table (52KB)
+#   0x0D000 - 0x0EFFF: esp_secure_cert (8KB) - Device attestation certificates
+#   0x10000 - 0x1BFFF: nvs (48KB) - Non-volatile storage
+#   0x1C000 - 0x1CFFF: nvs_keys (4KB) - NVS encryption keys
+#   0x1D000 - 0x1EFFF: otadata (8KB) - OTA state tracking
+#   0x1F000 - 0x1FFFF: phy_init (4KB) - PHY calibration data
+#   0x20000 - 0x1FFFFF: ota_0 (1920KB) - Primary application
+#   0x200000 - 0x3DFFFF: ota_1 (1920KB) - Secondary application (OTA)
+#   0x3E0000 - 0x3E5FFF: fctry (24KB) - Factory data (commissioning info)
+#
 esp_secure_cert,  0x3F, ,0xd000,    0x2000, encrypted
 nvs,      data, nvs,     0x10000,   0xC000,
 nvs_keys, data, nvs_keys,,          0x1000, encrypted

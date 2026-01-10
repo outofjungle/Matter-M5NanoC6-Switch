@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <atomic>
 
 #include <esp_log.h>
 #include <esp_matter.h>
@@ -26,9 +27,13 @@ using namespace chip::app::Clusters;
 using namespace esp_matter;
 
 static const char *TAG = "app_driver";
-led_strip_t *s_led_strip = NULL;  // Exported for app_reset LED control
+
+static led_strip_t *s_led_strip = NULL;
 static TimerHandle_t s_identify_timer = NULL;
-static bool s_identify_blink_state = false;
+static std::atomic<bool> s_identify_blink_state{false};
+
+// Forward declaration for timer callback
+static void identify_timer_cb(TimerHandle_t timer);
 
 app_driver_handle_t app_driver_led_init(void)
 {
@@ -40,15 +45,23 @@ app_driver_handle_t app_driver_led_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    gpio_config(&io_conf);
-    gpio_set_level((gpio_num_t)M5NANOC6_LED_POWER_GPIO, 1);
+    esp_err_t err = gpio_config(&io_conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "GPIO config failed: %d", err);
+        return NULL;
+    }
+    err = gpio_set_level((gpio_num_t)M5NANOC6_LED_POWER_GPIO, 1);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "GPIO set level failed: %d", err);
+        return NULL;
+    }
     ESP_LOGI(TAG, "Enabled WS2812 power on GPIO %d", M5NANOC6_LED_POWER_GPIO);
 
     // Configure RMT for WS2812
     rmt_config_t rmt_cfg = RMT_DEFAULT_CONFIG_TX((gpio_num_t)M5NANOC6_LED_DATA_GPIO, (rmt_channel_t)M5NANOC6_RMT_CHANNEL);
     rmt_cfg.clk_div = 2;
 
-    esp_err_t err = rmt_config(&rmt_cfg);
+    err = rmt_config(&rmt_cfg);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "RMT config failed: %d", err);
         return NULL;
@@ -69,8 +82,14 @@ app_driver_handle_t app_driver_led_init(void)
     }
 
     // Set initial LED state (off = dim blue)
-    s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 20);  // Dim blue
-    s_led_strip->refresh(s_led_strip, 100);
+    s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
+    s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+
+    // Pre-create identify timer to avoid allocation during operation
+    s_identify_timer = xTimerCreate("identify", pdMS_TO_TICKS(LED_IDENTIFY_BLINK_MS), pdTRUE, NULL, identify_timer_cb);
+    if (!s_identify_timer) {
+        ESP_LOGW(TAG, "Failed to create identify timer");
+    }
 
     ESP_LOGI(TAG, "LED driver initialized on GPIO %d", M5NANOC6_LED_DATA_GPIO);
     return (app_driver_handle_t)s_led_strip;
@@ -101,25 +120,23 @@ app_driver_handle_t app_driver_button_init(void)
 
 esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power)
 {
-    led_strip_t *strip = s_led_strip;
-    if (handle) {
-        strip = (led_strip_t *)handle;
-    }
-    if (!strip) {
-        ESP_LOGE(TAG, "LED strip is NULL");
+    (void)handle;  // Unused - always use global LED strip
+
+    if (!s_led_strip) {
+        ESP_LOGE(TAG, "LED strip not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (power) {
         // ON state = bright blue
-        strip->set_pixel(strip, 0, 0, 0, 128);  // Bright blue (GRB order for WS2812)
+        s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_ON_G, LED_COLOR_ON_R, LED_COLOR_ON_B);
     } else {
         // OFF state = dim blue
-        strip->set_pixel(strip, 0, 0, 0, 20);   // Dim blue
+        s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
     }
 
-    strip->refresh(strip, 100);
-    ESP_LOGI(TAG, "LED indicator set to %s", power ? "ON (bright blue)" : "OFF (dim blue)");
+    s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+    ESP_LOGD(TAG, "LED set to %s", power ? "ON" : "OFF");
     return ESP_OK;
 }
 
@@ -130,7 +147,7 @@ esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_
 
     if (cluster_id == OnOff::Id) {
         if (attribute_id == OnOff::Attributes::OnOff::Id) {
-            ESP_LOGI(TAG, "OnOff attribute updated: endpoint %d, value %d", endpoint_id, val->val.b);
+            ESP_LOGD(TAG, "OnOff: endpoint %d, value %d", endpoint_id, val->val.b);
             err = app_driver_led_set_power(driver_handle, val->val.b);
         }
     }
@@ -148,24 +165,23 @@ static void identify_timer_cb(TimerHandle_t timer)
     s_identify_blink_state = !s_identify_blink_state;
     if (s_identify_blink_state) {
         // Blink ON - white flash
-        s_led_strip->set_pixel(s_led_strip, 0, 128, 128, 128);
+        s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_IDENTIFY_G, LED_COLOR_IDENTIFY_R, LED_COLOR_IDENTIFY_B);
     } else {
         // Blink OFF
         s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);
     }
-    s_led_strip->refresh(s_led_strip, 100);
+    s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
 }
 
 esp_err_t app_driver_led_identify_start(void)
 {
     ESP_LOGI(TAG, "Starting identify blink");
 
-    if (!s_identify_timer) {
-        s_identify_timer = xTimerCreate("identify", pdMS_TO_TICKS(500), pdTRUE, NULL, identify_timer_cb);
-    }
-
     if (s_identify_timer) {
         xTimerStart(s_identify_timer, 0);
+    } else {
+        ESP_LOGW(TAG, "Identify timer not initialized");
+        return ESP_ERR_INVALID_STATE;
     }
 
     return ESP_OK;
@@ -181,4 +197,9 @@ esp_err_t app_driver_led_identify_stop(bool current_power)
 
     // Restore normal LED state
     return app_driver_led_set_power(NULL, current_power);
+}
+
+led_strip_t *app_driver_get_led_strip(void)
+{
+    return s_led_strip;
 }

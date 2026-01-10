@@ -2,7 +2,7 @@
    M5NanoC6 Matter Switch - Main Application
 
    Creates a Matter on_off_plug_in_unit device with:
-   - WS2812 LED indicator (green=on, red=off)
+   - WS2812 LED indicator (bright blue=on, dim blue=off)
    - Button for local toggle control
    - Thread networking
 */
@@ -13,7 +13,7 @@
 
 #include <esp_matter.h>
 #include <esp_matter_console.h>
-#include <esp_matter_ota.h>
+#include <esp_matter_ota.h>  // Required for CONFIG_ENABLE_OTA_REQUESTOR
 
 #include <iot_button.h>
 #include <common_macros.h>
@@ -22,12 +22,29 @@
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #include <platform/ESP32/OpenthreadLauncher.h>
+
+// OpenThread platform configuration
+#define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()                                           \
+    {                                                                                   \
+        .radio_mode = RADIO_MODE_NATIVE,                                                \
+    }
+
+#define ESP_OPENTHREAD_DEFAULT_HOST_CONFIG()                                            \
+    {                                                                                   \
+        .host_connection_mode = HOST_CONNECTION_MODE_NONE,                              \
+    }
+
+#define ESP_OPENTHREAD_DEFAULT_PORT_CONFIG()                                            \
+    {                                                                                   \
+        .storage_partition_name = "nvs", .netif_queue_size = 10, .task_queue_size = 10, \
+    }
 #endif
 
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
 
 #include "include/CHIPProjectConfig.h"
+#include <esp_app_desc.h>
 
 static const char *TAG = "app_main";
 
@@ -42,6 +59,13 @@ constexpr auto k_timeout_seconds = 300;
 static app_driver_handle_t s_led_handle = NULL;
 static app_driver_handle_t s_button_handle = NULL;
 static uint16_t s_switch_endpoint_id = 0;
+
+// Cached attribute pointer for fast button toggle
+static attribute_t *s_onoff_attribute = NULL;
+
+// Cluster/attribute IDs (compile-time constants)
+static constexpr uint32_t ONOFF_CLUSTER_ID = OnOff::Id;
+static constexpr uint32_t ONOFF_ATTRIBUTE_ID = OnOff::Attributes::OnOff::Id;
 
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
@@ -121,13 +145,10 @@ static esp_err_t app_identification_cb(identification::callback_type_t type, uin
     } else if (type == identification::callback_type_t::STOP) {
         // Get current OnOff state to restore LED
         bool current_power = false;
-        if (s_switch_endpoint_id != 0) {
+        if (s_onoff_attribute) {
             esp_matter_attr_val_t val = esp_matter_invalid(NULL);
-            attribute_t *attr = attribute::get(s_switch_endpoint_id, OnOff::Id, OnOff::Attributes::OnOff::Id);
-            if (attr) {
-                attribute::get_val(attr, &val);
-                current_power = val.val.b;
-            }
+            attribute::get_val(s_onoff_attribute, &val);
+            current_power = val.val.b;
         }
         app_driver_led_identify_stop(current_power);
     }
@@ -151,37 +172,36 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 // Button callback to toggle switch state
 static void button_toggle_cb(void *arg, void *data)
 {
-    if (s_switch_endpoint_id == 0) {
-        ESP_LOGW(TAG, "Switch endpoint not initialized");
+    if (!s_onoff_attribute) {
+        ESP_LOGW(TAG, "OnOff attribute not cached");
         return;
     }
 
-    // Get current OnOff state
+    // Get current OnOff state using cached attribute pointer (fast path)
     esp_matter_attr_val_t val = esp_matter_invalid(NULL);
-    uint32_t cluster_id = OnOff::Id;
-    uint32_t attribute_id = OnOff::Attributes::OnOff::Id;
-
-    endpoint_t *endpoint = endpoint::get(node::get(), s_switch_endpoint_id);
-    cluster_t *cluster = cluster::get(endpoint, cluster_id);
-    attribute_t *attribute = attribute::get(cluster, attribute_id);
-
-    attribute::get_val(attribute, &val);
+    attribute::get_val(s_onoff_attribute, &val);
     bool current_state = val.val.b;
 
     // Toggle the state
     val.val.b = !current_state;
-    ESP_LOGI(TAG, "Button pressed: toggling switch from %d to %d", current_state, val.val.b);
+    ESP_LOGD(TAG, "Button: toggle %d -> %d", current_state, val.val.b);
 
     // Update the attribute (this will trigger the callback and update the LED)
-    attribute::update(s_switch_endpoint_id, cluster_id, attribute_id, &val);
+    attribute::update(s_switch_endpoint_id, ONOFF_CLUSTER_ID, ONOFF_ATTRIBUTE_ID, &val);
 }
 
 extern "C" void app_main()
 {
     esp_err_t err = ESP_OK;
 
-    // Initialize NVS
-    nvs_flash_init();
+    // Initialize NVS with error recovery
+    err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW(TAG, "NVS partition corrupted, erasing...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
 
     // Initialize LED driver first (for visual feedback)
     s_led_handle = app_driver_led_init();
@@ -206,6 +226,12 @@ extern "C" void app_main()
     s_switch_endpoint_id = endpoint::get_id(endpoint);
     ESP_LOGI(TAG, "Created on_off_plug_in_unit endpoint with ID %d", s_switch_endpoint_id);
 
+    // Cache OnOff attribute pointer for fast button toggle
+    s_onoff_attribute = attribute::get(s_switch_endpoint_id, ONOFF_CLUSTER_ID, ONOFF_ATTRIBUTE_ID);
+    if (!s_onoff_attribute) {
+        ESP_LOGW(TAG, "Failed to cache OnOff attribute");
+    }
+
     // Initialize button and register callbacks
     s_button_handle = app_driver_button_init();
     if (s_button_handle) {
@@ -228,7 +254,8 @@ extern "C" void app_main()
     err = esp_matter::start(app_event_cb);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
 
-    ESP_LOGI(TAG, "M5NanoC6 Matter Switch started");
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    ESP_LOGI(TAG, "M5NanoC6 Matter Switch v%s started", app_desc->version);
 
     // Log commissioning info from CHIPProjectConfig.h
     // To change these values, edit main/include/CHIPProjectConfig.h

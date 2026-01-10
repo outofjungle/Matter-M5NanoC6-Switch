@@ -1,0 +1,19 @@
+# M5NanoC6 Matter Switch - Production SDK Configuration
+# Use with: idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.release" build
+
+# Disable debug shell (saves ~30KB RAM)
+CONFIG_ENABLE_CHIP_SHELL=n
+
+# Reduce log level to warnings only
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+
+# Disable OpenThread CLI
+CONFIG_OPENTHREAD_CLI=n
+
+# Additional size optimizations
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE=y
+
+# Disable debug features
+CONFIG_ESP_SYSTEM_PANIC_PRINT_HALT=y
+CONFIG_HEAP_TRACING_OFF=y

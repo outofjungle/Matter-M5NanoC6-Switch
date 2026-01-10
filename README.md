@@ -12,6 +12,46 @@ ESP32-C6 Matter-enabled switch using esp-matter SDK with Thread networking.
 
 **Matter Device Type**: On/Off Plug-in Unit (0x010A) over Thread
 
+## Matter Device Model
+
+Matter devices follow a hierarchical data model: **Node → Endpoints → Clusters → Attributes/Commands**
+
+```
+M5NanoC6 Switch (Node)
+│
+├── Endpoint 0: Root Node (reserved)
+│   ├── Basic Information Cluster
+│   │   ├── VendorName: "M5Stack"
+│   │   ├── ProductName: "M5NanoC6 Switch"
+│   │   ├── VendorID: 0xFFF1
+│   │   └── ProductID: 0x8000
+│   ├── Network Commissioning Cluster (Thread)
+│   ├── General Commissioning Cluster
+│   └── Access Control Cluster
+│
+└── Endpoint 1: On/Off Plug-in Unit (0x010A)
+    ├── Identify Cluster
+    │   └── Identify command → LED blinks white
+    ├── Groups Cluster
+    ├── Scenes Cluster
+    └── On/Off Cluster (server)
+        ├── Attributes:
+        │   └── OnOff (bool) → LED state
+        └── Commands:
+            ├── On
+            ├── Off
+            └── Toggle
+```
+
+### How It Works
+
+1. **Node Creation** (`app_main.cpp:217`): Creates the Matter node with device info
+2. **Endpoint Creation** (`app_main.cpp:223`): Adds On/Off Plug-in Unit endpoint with required clusters
+3. **Attribute Callback** (`app_main.cpp:138`): When OnOff attribute changes, updates LED
+4. **Button Press** (`app_main.cpp:152`): Reads OnOff attribute, toggles it, triggers callback
+
+The esp-matter SDK handles cluster creation automatically based on the device type. See [Matter Clusters, Attributes, Commands](https://developer.espressif.com/blog/matter-clusters-attributes-commands/) for more details.
+
 ## Hardware
 
 [M5Stack Nano C6 Dev Kit](https://shop.m5stack.com/products/m5stack-nanoc6-dev-kit)

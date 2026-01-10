@@ -65,8 +65,24 @@ CONFIG_LIBSODIUM_USE_MBEDTLS_SHA=y
 # FreeRTOS
 CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=y
 
-# Matter Shell (for debugging)
+# Matter Shell (disable for production to save ~30KB RAM)
 CONFIG_ENABLE_CHIP_SHELL=y
 
 # Disable ESP Insights (causes build issues with managed components)
 CONFIG_ESP_INSIGHTS_ENABLED=n
+
+# ====== Memory Optimizations ======
+# Use newlib nano for smaller footprint
+CONFIG_NEWLIB_NANO_FORMAT=y
+
+# Limit dynamic endpoints (saves heap)
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=2
+
+# BLE connection limits
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+
+# Reduce log level for production (change to _WARN for release)
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Optimize for size
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y

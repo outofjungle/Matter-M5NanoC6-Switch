@@ -5,6 +5,7 @@
    Runtime only - hold button for 20 seconds while device is running.
 */
 
+#include <atomic>
 #include <esp_log.h>
 #include <esp_matter.h>
 #include <freertos/FreeRTOS.h>
@@ -20,18 +21,16 @@ static const char *TAG = "app_reset";
 // Factory reset timing
 #define FACTORY_RESET_HOLD_TIME_MS  20000  // 20 seconds
 
-// LED strip reference (from app_driver)
-extern led_strip_t *s_led_strip;
-
 // Runtime reset state
 static TimerHandle_t s_reset_timer = NULL;
-static uint32_t s_reset_start_time = 0;
-static bool s_reset_in_progress = false;
+static std::atomic<uint32_t> s_reset_start_time{0};
+static std::atomic<bool> s_reset_in_progress{false};
 
 // Set LED color for reset countdown (red with increasing intensity)
 static void set_reset_led(uint32_t elapsed_ms)
 {
-    if (!s_led_strip) return;
+    led_strip_t *strip = app_driver_get_led_strip();
+    if (!strip) return;
 
     // Calculate progress (0-100%)
     uint32_t progress = (elapsed_ms * 100) / FACTORY_RESET_HOLD_TIME_MS;
@@ -42,27 +41,29 @@ static void set_reset_led(uint32_t elapsed_ms)
     bool led_on = ((elapsed_ms / (blink_period / 2)) % 2) == 0;
 
     if (led_on) {
-        // Red intensity increases with progress
-        uint8_t intensity = 50 + (progress * 2);  // 50 -> 250
-        s_led_strip->set_pixel(s_led_strip, 0, intensity, 0, 0);  // Red (GRB)
+        // Red intensity increases with progress (50 -> 255)
+        uint8_t intensity = LED_COLOR_RESET_R_MIN + (progress * 2);
+        if (intensity > LED_COLOR_RESET_R_MAX) intensity = LED_COLOR_RESET_R_MAX;
+        strip->set_pixel(strip, 0, LED_COLOR_RESET_G, intensity, LED_COLOR_RESET_B);
     } else {
-        s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);  // Off
+        strip->set_pixel(strip, 0, 0, 0, 0);  // Off
     }
-    s_led_strip->refresh(s_led_strip, 100);
+    strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
 }
 
 // Flash LED to indicate reset is happening
 static void flash_reset_led(void)
 {
-    if (!s_led_strip) return;
+    led_strip_t *strip = app_driver_get_led_strip();
+    if (!strip) return;
 
     for (int i = 0; i < 5; i++) {
-        s_led_strip->set_pixel(s_led_strip, 0, 255, 0, 0);  // Bright red
-        s_led_strip->refresh(s_led_strip, 100);
-        vTaskDelay(pdMS_TO_TICKS(100));
-        s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);
-        s_led_strip->refresh(s_led_strip, 100);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        strip->set_pixel(strip, 0, LED_COLOR_RESET_G, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_B);
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
+        vTaskDelay(pdMS_TO_TICKS(LED_RESET_UPDATE_MS));
+        strip->set_pixel(strip, 0, 0, 0, 0);
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
+        vTaskDelay(pdMS_TO_TICKS(LED_RESET_UPDATE_MS));
     }
 }
 
@@ -96,11 +97,10 @@ static void button_long_press_start_cb(void *arg, void *data)
     s_reset_in_progress = true;
     s_reset_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-    // Start timer for LED updates
-    if (!s_reset_timer) {
-        s_reset_timer = xTimerCreate("reset", pdMS_TO_TICKS(100), pdTRUE, NULL, reset_timer_cb);
+    // Start timer for LED updates (timer pre-created in app_reset_button_register)
+    if (s_reset_timer) {
+        xTimerStart(s_reset_timer, 0);
     }
-    xTimerStart(s_reset_timer, 0);
 }
 
 static void button_released_cb(void *arg, void *data)
@@ -117,9 +117,10 @@ static void button_released_cb(void *arg, void *data)
     ESP_LOGI(TAG, "Factory reset cancelled after %u ms", (unsigned)elapsed_ms);
 
     // Restore LED state (will be updated by attribute callback)
-    if (s_led_strip) {
-        s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 20);  // Dim blue
-        s_led_strip->refresh(s_led_strip, 100);
+    led_strip_t *strip = app_driver_get_led_strip();
+    if (strip) {
+        strip->set_pixel(strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     }
 }
 
@@ -131,14 +132,32 @@ extern "C" esp_err_t app_reset_button_register(void *handle)
     }
 
     button_handle_t button_handle = (button_handle_t)handle;
-    esp_err_t err = ESP_OK;
+    esp_err_t err;
+
+    // Pre-create reset timer to avoid allocation during operation
+    s_reset_timer = xTimerCreate("reset", pdMS_TO_TICKS(LED_RESET_UPDATE_MS), pdTRUE, NULL, reset_timer_cb);
+    if (!s_reset_timer) {
+        ESP_LOGE(TAG, "Failed to create reset timer");
+        return ESP_ERR_NO_MEM;
+    }
 
     // Long press start triggers countdown
-    err |= iot_button_register_cb(button_handle, BUTTON_LONG_PRESS_START,
-                                   button_long_press_start_cb, NULL);
-    // Release cancels if not complete
-    err |= iot_button_register_cb(button_handle, BUTTON_PRESS_UP,
-                                   button_released_cb, NULL);
+    err = iot_button_register_cb(button_handle, BUTTON_LONG_PRESS_START,
+                                  button_long_press_start_cb, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register long press callback: %d", err);
+        return err;
+    }
 
-    return err;
+    // Release cancels if not complete
+    err = iot_button_register_cb(button_handle, BUTTON_PRESS_UP,
+                                  button_released_cb, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register press up callback: %d", err);
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Factory reset handler registered (hold %us)",
+             (unsigned)(FACTORY_RESET_HOLD_TIME_MS / 1000));
+    return ESP_OK;
 }
