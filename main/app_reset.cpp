@@ -24,8 +24,8 @@ static const char *TAG = "app_reset";
 // Reset state machine
 enum class ResetState : uint8_t {
     IDLE,
-    COUNTDOWN,      // Counting down, showing progress LED
-    FLASHING,       // Final flash sequence before reset
+    COUNTDOWN,      // Counting down with slow steady red blink
+    FLASHING,       // Solid red - factory reset in progress (user can release)
 };
 
 static TimerHandle_t s_reset_timer = NULL;
@@ -33,7 +33,7 @@ static std::atomic<uint32_t> s_reset_start_time{0};
 static std::atomic<ResetState> s_reset_state{ResetState::IDLE};
 static std::atomic<uint8_t> s_flash_count{0};  // Flash sequence counter
 
-// Set LED color for reset countdown (red with increasing intensity)
+// Set LED color for reset countdown (slow steady red blink)
 static void set_reset_led(uint32_t elapsed_ms)
 {
     if (!app_driver_led_lock()) return;
@@ -44,22 +44,13 @@ static void set_reset_led(uint32_t elapsed_ms)
         return;
     }
 
-    // Calculate progress (0-100%)
-    uint32_t progress = (elapsed_ms * 100) / FACTORY_RESET_HOLD_TIME_MS;
-    if (progress > 100) progress = 100;
-
-    // Blink rate increases with progress (period decreases from START to END)
-    constexpr uint32_t blink_range = LED_RESET_BLINK_START_MS - LED_RESET_BLINK_END_MS;
-    uint32_t blink_period = LED_RESET_BLINK_START_MS - (progress * blink_range / 100);
+    // Slow steady blink (no speed change)
+    constexpr uint32_t blink_period = LED_RESET_BLINK_START_MS;
     bool led_on = ((elapsed_ms / (blink_period / 2)) % 2) == 0;
 
     if (led_on) {
-        // Red intensity increases with progress (50 -> 255)
-        // Use uint32_t to avoid narrowing overflow before clamping
-        uint32_t intensity_raw = static_cast<uint32_t>(LED_COLOR_RESET_R_MIN) + (progress * 2);
-        uint8_t intensity = static_cast<uint8_t>(
-            intensity_raw > LED_COLOR_RESET_R_MAX ? LED_COLOR_RESET_R_MAX : intensity_raw);
-        strip->set_pixel(strip, 0, intensity, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
+        // Solid red at full intensity
+        strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
     } else {
         strip->set_pixel(strip, 0, 0, 0, 0);  // Off
     }
@@ -67,11 +58,11 @@ static void set_reset_led(uint32_t elapsed_ms)
     app_driver_led_unlock();
 }
 
-// Number of flash cycles before factory reset (each cycle = on + off)
-#define RESET_FLASH_CYCLES  5
+// Delay before factory reset (solid red indicator)
+#define RESET_SOLID_DELAY_MS  1000  // 1 second solid red before reset
 
-// Set flash LED state (called from timer, non-blocking)
-static void set_flash_led(bool on)
+// Set solid red LED (user can release button now)
+static void set_solid_red_led(void)
 {
     if (!app_driver_led_lock()) return;
 
@@ -81,46 +72,41 @@ static void set_flash_led(bool on)
         return;
     }
 
-    if (on) {
-        strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
-    } else {
-        strip->set_pixel(strip, 0, 0, 0, 0);
-    }
+    // Solid red - factory reset in progress
+    strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
     strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     app_driver_led_unlock();
 }
 
-// Timer callback for reset countdown and flash sequence
+// Timer callback for reset countdown and solid red phase
 static void reset_timer_cb(TimerHandle_t timer)
 {
     ResetState state = s_reset_state.load();
 
     if (state == ResetState::COUNTDOWN) {
-        // Countdown phase - show progress LED
+        // Countdown phase - slow steady blink
         uint32_t start_time = s_reset_start_time.load();
         uint32_t elapsed_ms = (xTaskGetTickCount() * portTICK_PERIOD_MS) - start_time;
 
         set_reset_led(elapsed_ms);
 
-        // Check if countdown complete - transition to flash phase
+        // Check if countdown complete - transition to solid red phase
         if (elapsed_ms >= FACTORY_RESET_HOLD_TIME_MS) {
-            ESP_LOGW(TAG, "Factory reset triggered!");
-            s_flash_count = 0;
+            ESP_LOGW(TAG, "Factory reset triggered! User can release button.");
+            s_reset_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
             s_reset_state = ResetState::FLASHING;
-            set_flash_led(true);  // Start with LED on
+            set_solid_red_led();  // Solid red - user can release button now
         }
     } else if (state == ResetState::FLASHING) {
-        // Flash phase - alternate LED on/off each timer tick
-        uint8_t count = s_flash_count.fetch_add(1);
+        // Solid red phase - wait for delay then perform reset
+        uint32_t start_time = s_reset_start_time.load();
+        uint32_t elapsed_ms = (xTaskGetTickCount() * portTICK_PERIOD_MS) - start_time;
 
-        if (count >= RESET_FLASH_CYCLES * 2) {
-            // Flash sequence complete - perform factory reset
+        if (elapsed_ms >= RESET_SOLID_DELAY_MS) {
+            // Delay complete - perform factory reset
             xTimerStop(s_reset_timer, portMAX_DELAY);
             s_reset_state = ResetState::IDLE;
             esp_matter::factory_reset();
-        } else {
-            // Toggle LED (even count = on, odd count = off)
-            set_flash_led((count % 2) == 0);
         }
     }
 }

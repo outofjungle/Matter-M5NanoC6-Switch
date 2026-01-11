@@ -77,8 +77,8 @@ When you first power on the device:
 | **Bright Blue** | Switch is ON |
 | **Dim Blue** | Switch is OFF |
 | **Blinking White** | Identify command (triggered from app) |
-| **Blinking Red** (increasing speed) | Factory reset countdown |
-| **Fast Red Blink** | Factory reset in progress |
+| **Slow Red Blink** | Factory reset countdown (hold for 20s) |
+| **Solid Red** | Factory reset in progress (can release button) |
 
 ### App Control
 
@@ -95,11 +95,11 @@ Once commissioned, you can:
 If you need to remove the device from your home or start over:
 
 1. **Press and hold the button for 20 seconds**
-2. The LED will start blinking red
-3. The blink rate will increase as you continue holding
-4. After 20 seconds, the LED will blink rapidly
-5. Release the button
-6. The device will reset and restart
+2. The LED will start blinking red (slow steady blink)
+3. Continue holding for the full 20 seconds
+4. After 20 seconds, the LED will turn **solid red**
+5. **You can now release the button** - factory reset is in progress
+6. The device will reset and restart automatically
 7. It will be ready for commissioning again
 
 **When to factory reset:**

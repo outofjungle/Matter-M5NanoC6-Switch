@@ -180,4 +180,4 @@ ls /dev/ttyUSB*        # Linux
 ```
 
 ### Factory Reset
-Hold button for 20 seconds. LED blinks red with increasing speed during countdown.
+Hold button for 20 seconds. LED blinks red slowly during countdown. After 20 seconds, LED turns solid red (user can release button). Device resets automatically.
