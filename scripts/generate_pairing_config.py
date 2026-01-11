@@ -20,6 +20,7 @@ import sys
 
 try:
     import qrcode
+    from PIL import Image, ImageDraw, ImageFont
     HAS_QRCODE = True
 except ImportError:
     HAS_QRCODE = False
@@ -252,9 +253,50 @@ Examples:
         qr.add_data(qr_code)
         qr.make(fit=True)
 
-        img = qr.make_image(fill_color="black", back_color="white")
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+
+        # Convert to PIL Image if necessary
+        if not isinstance(qr_img, Image.Image):
+            qr_img = qr_img.convert('RGB')
+
+        # Format manual code as XXXX-XXX-XXXX
+        manual_code_str = str(manual_code)
+        if len(manual_code_str) == 11:
+            formatted_code = f"{manual_code_str[0:4]}-{manual_code_str[4:7]}-{manual_code_str[7:11]}"
+        else:
+            formatted_code = manual_code_str
+
+        # Add text below QR code
+        qr_width, qr_height = qr_img.size
+        text_height = 60  # Height for text area
+
+        # Create new image with extra space for text
+        img = Image.new('RGB', (qr_width, qr_height + text_height), 'white')
+        img.paste(qr_img, (0, 0))
+
+        # Add manual code text
+        draw = ImageDraw.Draw(img)
+
+        # Try to use a nice font, fall back to default if not available
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 36)
+        except:
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+            except:
+                font = ImageFont.load_default()
+
+        # Center the text
+        bbox = draw.textbbox((0, 0), formatted_code, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_x = (qr_width - text_width) // 2
+        text_y = qr_height + 10
+
+        draw.text((text_x, text_y), formatted_code, fill='black', font=font)
+
         img.save(args.qr_image)
         print(f"QR Image:    {args.qr_image}")
+        print(f"Manual Code: {formatted_code}")
 
 
 if __name__ == '__main__':

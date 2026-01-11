@@ -33,9 +33,9 @@
 #define LED_COLOR_IDENTIFY_B        128
 
 // LED Color Configuration - Factory Reset (red)
-#define LED_COLOR_RESET_G           0       // Red only (GRB order)
-#define LED_COLOR_RESET_R_MIN       50      // Starting intensity
-#define LED_COLOR_RESET_R_MAX       255     // Final intensity
+#define LED_COLOR_RESET_G           0       // GRB order
+#define LED_COLOR_RESET_R_MIN       50      // Red starting intensity
+#define LED_COLOR_RESET_R_MAX       255     // Red final intensity
 #define LED_COLOR_RESET_B           0
 
 // LED Timing Configuration

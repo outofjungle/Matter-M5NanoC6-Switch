@@ -59,7 +59,7 @@ static void set_reset_led(uint32_t elapsed_ms)
         uint32_t intensity_raw = static_cast<uint32_t>(LED_COLOR_RESET_R_MIN) + (progress * 2);
         uint8_t intensity = static_cast<uint8_t>(
             intensity_raw > LED_COLOR_RESET_R_MAX ? LED_COLOR_RESET_R_MAX : intensity_raw);
-        strip->set_pixel(strip, 0, LED_COLOR_RESET_G, intensity, LED_COLOR_RESET_B);
+        strip->set_pixel(strip, 0, intensity, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
     } else {
         strip->set_pixel(strip, 0, 0, 0, 0);  // Off
     }
@@ -82,7 +82,7 @@ static void set_flash_led(bool on)
     }
 
     if (on) {
-        strip->set_pixel(strip, 0, LED_COLOR_RESET_G, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_B);
+        strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
     } else {
         strip->set_pixel(strip, 0, 0, 0, 0);
     }
