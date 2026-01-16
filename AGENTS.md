@@ -50,8 +50,6 @@ When a milestone is complete:
 - `docs:` - Documentation changes
 - `WIP:` - Work in progress (intermediate commits)
 
-**DO NOT add `Co-Authored-By: Claude` to commit messages.**
-
 ## Session Close Protocol
 
 Before ending a session:
@@ -68,3 +66,8 @@ Before ending a session:
 - Use `bd` for milestone/feature tracking (multi-session, dependencies)
 - Use `TodoWrite` for detailed sub-tasks within a session
 - Close bd issues only when milestone is fully complete
+
+## Documentation
+
+- [ESP-IDF Docker on macOS](docs/IDF-DOCKER-MAC.md) - Using ESP-IDF Docker image on Mac, including limitations and workarounds
+- [ESP-Matter Reference](docs/ESP-MATTER-REFERENCE.md) - ESP-Matter framework reference
