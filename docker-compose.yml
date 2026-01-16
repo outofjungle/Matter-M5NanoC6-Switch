@@ -18,9 +18,16 @@ services:
       - IDF_GIT_SAFE_DIR=/project
 
     # Device pass-through for flashing and monitoring
-    # Uncomment and adjust the device path as needed:
+    # NOTE: Docker for Mac does NOT support USB device pass-through
+    # Use RFC2217 remote serial port instead (see docs/IDF-DOCKER-MAC.md)
+    #
+    # On Linux, you can use direct device pass-through:
     # devices:
-    #   - /dev/cu.usbmodem101:/dev/cu.usbmodem101  # macOS (your device)
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    #
+    # On macOS, use RFC2217:
+    # 1. Run: ./scripts/ser2net-start.sh (on host)
+    # 2. Use: -p rfc2217://host.docker.internal:4000 with idf.py commands
 
     stdin_open: true
     tty: true
