@@ -8,8 +8,9 @@ CONFIG_IDF_TARGET="esp32c6"
 CONFIG_CHIP_PROJECT_CONFIG="main/include/CHIPProjectConfig.h"
 
 # Matter Device Identity
-# Vendor ID: 0xFFF1 = Test vendor (change for production)
-# Product ID: 0x8000 = Test product (change for production)
+# Using ESP-Matter SDK defaults (test vendor/product)
+# Vendor ID: 0xFFF1 = ESP-Matter test vendor
+# Product ID: 0x8000 = Generic test product
 CONFIG_DEVICE_VENDOR_ID=0xFFF1
 CONFIG_DEVICE_PRODUCT_ID=0x8000
 
@@ -86,3 +87,10 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
 # Optimize for size
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# ====== Device Attestation Certificate (DAC) Provider ======
+# Use example DAC provider for development
+# Note: For production, switch to FACTORY_PARTITION_DAC_PROVIDER
+# and provision certificates in factory partition
+CONFIG_SEC_CERT_DAC_PROVIDER=y
+CONFIG_EXAMPLE_DAC_PROVIDER=y

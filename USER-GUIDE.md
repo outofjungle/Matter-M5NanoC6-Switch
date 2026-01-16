@@ -169,5 +169,5 @@ For issues or questions:
 **Device Information:**
 - Vendor: M5Stack
 - Product: M5NanoC6 Switch
-- Vendor ID: 0xFFF1
-- Product ID: 0x8000
+- Vendor ID: 0xFFF2
+- Product ID: 0x0010
