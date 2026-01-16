@@ -1,7 +1,8 @@
-# Matter M5NanoC6 Switch - Makefile
+# Matter M5NanoC6 Switch - Docker-based Makefile
+# All builds run in Docker containers - no local ESP-IDF installation needed
 
 .PHONY: all build clean fullclean flash monitor erase \
-        menuconfig generate-pairing help
+        menuconfig generate-pairing shell image-build help
 
 # Default target
 all: build
@@ -11,6 +12,7 @@ all: build
 #------------------------------------------------------------------------------
 
 TARGET := esp32c6
+
 # Auto-detect serial port (macOS: cu.usbmodem*, Linux: ttyUSB* or ttyACM*)
 PORT ?= $(shell ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1)
 
@@ -18,44 +20,81 @@ PORT ?= $(shell ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | hea
 PAIRING_CONFIG := main/include/CHIPPairingConfig.h
 PAIRING_QR_IMAGE := pairing_qr.png
 
+# Docker compose command
+DOCKER_COMPOSE := docker-compose
+DOCKER_RUN := $(DOCKER_COMPOSE) run --rm esp-idf
+
+# Set UID/GID for file ownership (prevents root-owned files)
+export UID := $(shell id -u)
+export GID := $(shell id -g)
+
+#------------------------------------------------------------------------------
+# Docker Image Management
+#------------------------------------------------------------------------------
+
+image-build: ## Build Docker image with ESP-Matter SDK (~2-3GB, takes 10-20 min first time)
+	$(DOCKER_COMPOSE) build
+
+image-pull: ## Pull base ESP-IDF image
+	docker pull espressif/idf:v5.3.4
+
+image-status: ## Show Docker image info
+	@echo "Checking Docker images..."
+	@docker images | grep -E "REPOSITORY|esp|matter" || echo "No ESP images found"
+
 #------------------------------------------------------------------------------
 # Build
 #------------------------------------------------------------------------------
 
-build: ## Build firmware
-ifndef ESP_MATTER_PATH
-	$(error ESP_MATTER_PATH not set)
-endif
-ifndef IDF_PATH
-	$(error IDF_PATH not set)
-endif
-	idf.py -D IDF_TARGET=$(TARGET) build
+build: ## Build firmware in Docker container
+	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) build
 
 clean: ## Clean build artifacts
-	idf.py clean
+	$(DOCKER_RUN) idf.py fullclean
 
 fullclean: ## Full clean (removes build, sdkconfig, managed_components)
-	rm -rf build managed_components
-	rm -f sdkconfig sdkconfig.old dependencies.lock
+	$(DOCKER_RUN) sh -c "rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
 
-menuconfig: ## Open SDK configuration
-	idf.py menuconfig
+rebuild: fullclean build ## Full clean and rebuild from scratch
+
+menuconfig: ## Open SDK configuration (interactive)
+	$(DOCKER_RUN) idf.py menuconfig
 
 #------------------------------------------------------------------------------
 # Flash & Monitor
 #------------------------------------------------------------------------------
 
-flash: build ## Flash firmware
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	idf.py -p $(PORT) flash
+flash: ## Flash firmware to device
+	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
+	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) flash
 
 monitor: ## Serial monitor (Ctrl+] to exit)
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	idf.py -p $(PORT) monitor
+	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
+	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) monitor
+
+flash-monitor: ## Flash and immediately open monitor
+	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
+	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) flash monitor
 
 erase: ## Erase flash (factory reset)
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	esptool.py --port $(PORT) erase_flash
+	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
+	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf esptool.py --port $(PORT) erase_flash
+
+#------------------------------------------------------------------------------
+# Development Tools
+#------------------------------------------------------------------------------
+
+shell: ## Open interactive shell in container
+	$(DOCKER_RUN) bash
+
+size: ## Show binary size analysis
+	$(DOCKER_RUN) idf.py size
+
+size-components: ## Show size breakdown by component
+	$(DOCKER_RUN) idf.py size-components
+
+size-files: ## Show size breakdown by source files
+	$(DOCKER_RUN) idf.py size-files
 
 #------------------------------------------------------------------------------
 # Pairing
@@ -74,20 +113,38 @@ print(f'{d} {p}')" | xargs -n2 sh -c 'python3 scripts/generate_pairing_config.py
 #------------------------------------------------------------------------------
 
 help: ## Show this help
-	@echo "Usage: make [target] [PORT=/dev/...]"
+	@echo "Matter M5NanoC6 Switch - Docker Build System"
+	@echo ""
+	@echo "First time setup:"
+	@echo "  make image-build     Build Docker image (~10-20 min, one-time)"
 	@echo ""
 	@echo "Build:"
-	@echo "  build            Build firmware"
-	@echo "  clean            Clean build artifacts"
-	@echo "  fullclean        Full clean (build, sdkconfig, deps)"
-	@echo "  menuconfig       Open SDK configuration"
+	@echo "  make build           Build firmware"
+	@echo "  make clean           Clean build artifacts"
+	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
+	@echo "  make rebuild         Full clean + rebuild"
+	@echo "  make menuconfig      Open SDK configuration (interactive)"
 	@echo ""
-	@echo "Flash:"
-	@echo "  flash            Flash firmware to device"
-	@echo "  monitor          Open serial monitor"
-	@echo "  erase            Erase flash (factory reset)"
+	@echo "Flash & Monitor:"
+	@echo "  make flash           Flash firmware to device"
+	@echo "  make monitor         Open serial monitor"
+	@echo "  make flash-monitor   Flash and monitor"
+	@echo "  make erase           Erase flash (factory reset)"
+	@echo ""
+	@echo "Development:"
+	@echo "  make shell           Open bash shell in container"
+	@echo "  make size            Show binary size analysis"
+	@echo "  make size-components Size breakdown by component"
+	@echo "  make size-files      Size breakdown by source files"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make image-build     Build Docker image"
+	@echo "  make image-pull      Pull base image"
+	@echo "  make image-status    Show Docker image info"
 	@echo ""
 	@echo "Pairing:"
-	@echo "  generate-pairing Generate random pairing code and QR"
+	@echo "  make generate-pairing Generate random pairing code and QR"
 	@echo ""
 	@echo "Current PORT: $(PORT)"
+	@echo ""
+	@echo "Override port: make flash PORT=/dev/ttyUSB0"

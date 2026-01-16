@@ -23,8 +23,8 @@ M5NanoC6 Switch (Node)
 │   ├── Basic Information Cluster
 │   │   ├── VendorName: "M5Stack"
 │   │   ├── ProductName: "M5NanoC6 Switch"
-│   │   ├── VendorID: 0xFFF1
-│   │   └── ProductID: 0x8000
+│   │   ├── VendorID: 0xFFF2
+│   │   └── ProductID: 0x0010
 │   ├── Network Commissioning Cluster (Thread)
 │   ├── General Commissioning Cluster
 │   └── Access Control Cluster
@@ -64,46 +64,56 @@ The esp-matter SDK handles cluster creation automatically based on the device ty
 
 ## Prerequisites
 
-- macOS or Linux
-- ESP-IDF v5.3.x
-- esp-matter SDK
+- **Docker Desktop** or Docker Engine + Docker Compose v2+
+- macOS, Linux, or Windows with WSL2
+- USB serial port access (for flashing)
+- Python 3 (for pairing QR code generation)
+
+No ESP-IDF or esp-matter installation required - everything runs in Docker containers!
 
 ## Setup
 
-### 1. Install ESP-IDF
+### 1. Install Docker
 
+**macOS/Windows**: Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+**Linux**:
 ```bash
-cd ~/Workspace/ESP
-git clone -b release/v5.3 --recursive https://github.com/espressif/esp-idf.git
-cd esp-idf && ./install.sh esp32c6
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and back in for group changes to take effect
+
+# Install Docker Compose (if not included)
+sudo apt-get install docker-compose-plugin
 ```
 
-### 2. Install esp-matter
+### 2. Build Docker Image (First Time Only)
+
+Build the Docker image with ESP-IDF and ESP-Matter SDK (~2-3GB, takes 10-20 minutes):
 
 ```bash
-cd ~/Workspace/ESP
-git clone --recursive https://github.com/espressif/esp-matter.git
-cd esp-matter && ./install.sh
+make image-build
 ```
 
-### 3. Environment Variables
+This creates a self-contained Docker image with:
+- ESP-IDF v5.3.4
+- ESP-Matter SDK (latest)
+- All build tools and dependencies
 
-Add to shell profile:
+**Note**: This is a one-time step. The image is cached locally.
 
+### 3. Serial Port Access (Linux only)
+
+Add your user to the dialout group:
 ```bash
-export IDF_PATH=~/Workspace/ESP/esp-idf
-export ESP_MATTER_PATH=~/Workspace/ESP/esp-matter
-export _PW_ACTUAL_ENVIRONMENT_ROOT=$ESP_MATTER_PATH/connectedhomeip/connectedhomeip/.environment
-export PATH=$_PW_ACTUAL_ENVIRONMENT_ROOT/cipd/packages/pigweed:$PATH
-export PATH=$_PW_ACTUAL_ENVIRONMENT_ROOT/cipd/packages/pigweed/bin:$PATH
-```
-
-Activate ESP-IDF (once per terminal):
-```bash
-source $IDF_PATH/export.sh
+sudo usermod -aG dialout $USER
+# Log out and back in
 ```
 
 ## Build and Flash
+
+All commands run in Docker containers:
 
 ```bash
 make build      # Build firmware
@@ -114,14 +124,38 @@ make monitor    # Serial monitor (Ctrl+] to exit)
 ### All Make Targets
 
 ```bash
-make build            # Build firmware
+# Build
+make build            # Build firmware in container
 make clean            # Clean build artifacts
 make fullclean        # Full clean (build, sdkconfig, deps)
-make menuconfig       # SDK configuration
-make flash            # Flash firmware
-make monitor          # Serial monitor
+make menuconfig       # SDK configuration (interactive)
+make rebuild          # Full clean + rebuild
+
+# Flash & Monitor
+make flash            # Flash firmware to device
+make monitor          # Serial monitor (Ctrl+] to exit)
+make flash-monitor    # Flash and immediately monitor
 make erase            # Erase flash (factory reset)
+
+# Development
+make shell            # Open bash shell in container
+make size             # Show binary size analysis
+make size-components  # Size breakdown by component
+make size-files       # Size breakdown by files
+
+# Docker
+make image-build      # Build Docker image
+make image-pull       # Pull base ESP-IDF image
+make image-status     # Show Docker image info
+
+# Pairing
 make generate-pairing # Generate random pairing code and QR
+```
+
+### Override Serial Port
+
+```bash
+make flash PORT=/dev/ttyUSB0
 ```
 
 ## Commissioning
@@ -167,16 +201,92 @@ Matter-M5NanoC6-Switch/
 
 ## Troubleshooting
 
-### Build fails with "gn not found"
-Ensure pigweed tools are in PATH:
+### Docker Image Build Fails
+
+If the image build fails during ESP-Matter clone:
 ```bash
-echo $PATH | grep pigweed
+# Clean up and retry
+docker-compose down
+docker system prune -f
+make image-build
 ```
 
-### Device not detected
+### Permission Denied (Docker)
+
+If you get "permission denied" errors:
+```bash
+# Linux: Add user to docker group
+sudo usermod -aG docker $USER
+# Log out and back in
+
+# macOS/Windows: Ensure Docker Desktop is running
+```
+
+### Build Artifacts Owned by Root
+
+If files in `build/` are owned by root:
+```bash
+# Fix ownership
+sudo chown -R $USER:$USER build/ managed_components/
+
+# Prevention: Ensure UID/GID are exported
+export UID=$(id -u)
+export GID=$(id -g)
+make build
+```
+
+### Device Not Detected
+
+Check serial port:
 ```bash
 ls /dev/cu.usbmodem*   # macOS
 ls /dev/ttyUSB*        # Linux
+```
+
+If not found:
+- Check USB cable connection
+- Check device drivers (CP210x or similar)
+- Linux: Ensure user is in dialout group
+
+### Flash Fails with "No Such Device"
+
+The device path may be different. Override with:
+```bash
+make flash PORT=/dev/cu.usbmodem14201  # macOS
+make flash PORT=/dev/ttyUSB0           # Linux
+```
+
+### Container Can't Access Serial Port
+
+**Linux**: Ensure user is in dialout group
+```bash
+sudo usermod -aG dialout $USER
+# Log out and back in
+```
+
+**macOS**: Device pass-through should work automatically
+
+**Alternative**: Edit `docker-compose.yml` and uncomment `privileged: true`
+
+### Slow Builds
+
+First build in Docker is slow (~10-20 min) due to:
+- Downloading ESP-IDF base image (~2.5GB)
+- Cloning ESP-Matter SDK (~1GB)
+- Installing Python dependencies
+
+**Subsequent builds are fast** due to Docker layer caching and persistent build volumes.
+
+To check cache status:
+```bash
+docker system df
+```
+
+### Clean Everything
+
+```bash
+make fullclean      # Clean project build artifacts
+docker system prune -f --volumes  # Clean Docker cache
 ```
 
 ### Factory Reset

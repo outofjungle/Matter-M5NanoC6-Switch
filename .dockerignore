@@ -1,0 +1,41 @@
+# Build artifacts
+build/
+managed_components/
+dependencies.lock
+sdkconfig
+sdkconfig.old
+
+# Git and version control
+.git/
+.gitignore
+.gitmodules
+.beads/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation and notes
+*.md
+*.txt
+!CMakeLists.txt
+
+# Temporary and log files
+*.log
+*.tmp
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# QR code and generated files
+*.png
+*.jpg
+*.jpeg

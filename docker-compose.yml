@@ -1,0 +1,26 @@
+services:
+  esp-idf:
+    # Use official ESP-Matter Docker image (includes ESP-IDF + ESP-Matter SDK + tools)
+    image: espressif/esp-matter:latest
+
+    volumes:
+      # Mount project source code (includes build directory)
+      - .:/project
+
+    working_dir: /project
+
+    environment:
+      # Target chip
+      - IDF_TARGET=esp32c6
+      # ESP-Matter SDK path (in official Docker image)
+      - ESP_MATTER_PATH=/opt/espressif/esp-matter
+      # Git safe directory (prevents git ownership warnings)
+      - IDF_GIT_SAFE_DIR=/project
+
+    # Device pass-through for flashing and monitoring
+    # Uncomment and adjust the device path as needed:
+    # devices:
+    #   - /dev/cu.usbmodem101:/dev/cu.usbmodem101  # macOS (your device)
+
+    stdin_open: true
+    tty: true
