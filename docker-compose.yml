@@ -1,7 +1,8 @@
 services:
   esp-idf:
     # Use official ESP-Matter Docker image (includes ESP-IDF + ESP-Matter SDK + tools)
-    image: espressif/esp-matter:latest
+    # Pinned to release-v1.5 with ESP-IDF v5.4.1 for reproducible builds
+    image: espressif/esp-matter:release-v1.5_idf_v5.4.1
 
     volumes:
       # Mount project source code (includes build directory)
