@@ -1,7 +1,7 @@
 # Matter M5NanoC6 Switch - Docker-based Makefile
 # All builds run in Docker containers - no local ESP-IDF installation needed
 
-.PHONY: all build clean fullclean flash monitor erase \
+.PHONY: all build clean fullclean flash monitor monitor-log erase \
         menuconfig generate-pairing shell image-build help
 
 # Default target
@@ -19,6 +19,10 @@ PORT ?= $(shell ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | hea
 # Pairing configuration
 PAIRING_CONFIG := main/include/CHIPPairingConfig.h
 PAIRING_QR_IMAGE := pairing_qr.png
+
+# Logging configuration
+LOGS_DIR := logs
+LOG_FILE := $(LOGS_DIR)/monitor_$(shell date +%Y%m%d_%H%M%S).log
 
 # Docker compose command
 DOCKER_COMPOSE := docker-compose
@@ -79,6 +83,20 @@ monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
 		screen $(PORT) 115200; \
 	fi
 
+monitor-log: ## Serial monitor with logging to file
+	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
+	@mkdir -p $(LOGS_DIR)
+	@echo "Logging to $(LOG_FILE)"
+	@echo "Press Ctrl+C to stop logging"
+	@if command -v esp-idf-monitor >/dev/null 2>&1; then \
+		esp-idf-monitor --port $(PORT) build/M5NanoC6-Switch.elf 2>&1 | tee $(LOG_FILE); \
+	else \
+		stty -f $(PORT) 115200 raw -echo; \
+		cat $(PORT) | while IFS= read -r line; do \
+			echo "$$(date '+%H:%M:%S.%3N') $$line" | tee -a $(LOG_FILE); \
+		done; \
+	fi
+
 flash-monitor: flash ## Flash and immediately open monitor
 	@echo "Waiting for device to reset..."
 	@sleep 2
@@ -136,6 +154,7 @@ help: ## Show this help
 	@echo "Flash & Monitor:"
 	@echo "  make flash           Flash firmware to device"
 	@echo "  make monitor         Open serial monitor"
+	@echo "  make monitor-log     Monitor with logging to logs/ directory"
 	@echo "  make flash-monitor   Flash and monitor"
 	@echo "  make erase           Erase flash (factory reset)"
 	@echo ""
