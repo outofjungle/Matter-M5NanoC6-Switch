@@ -23,8 +23,8 @@ M5NanoC6 Switch (Node)
 │   ├── Basic Information Cluster
 │   │   ├── VendorName: "M5Stack"
 │   │   ├── ProductName: "M5NanoC6 Switch"
-│   │   ├── VendorID: 0xFFF2
-│   │   └── ProductID: 0x0010
+│   │   ├── VendorID: 0xFFF1
+│   │   └── ProductID: 0x8000
 │   ├── Network Commissioning Cluster (Thread)
 │   ├── General Commissioning Cluster
 │   └── Access Control Cluster
@@ -46,7 +46,7 @@ M5NanoC6 Switch (Node)
 > **⚠️ DEVELOPMENT ONLY - NOT FOR PRODUCTION USE**
 >
 > This device uses **test-only Matter credentials** that are publicly known:
-> - **Vendor ID 0xFFF2**: Reserved for testing, explicitly forbidden in production
+> - **Vendor ID 0xFFF1**: Reserved for testing, explicitly forbidden in production
 > - **Example DAC Provider**: Uses insecure public test certificates
 > - **Test Pairing Codes**: Default credentials are public knowledge
 >

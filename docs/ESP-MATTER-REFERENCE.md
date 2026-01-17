@@ -138,8 +138,8 @@ CONFIG_CHIP_FACTORY_NAMESPACE_PARTITION_LABEL="fctry"
 pip install esp-matter-mfg-tool
 
 esp-matter-mfg-tool \
-    -v 0xFFF2 \
-    -p 0x8001 \
+    -v 0xFFF1 \
+    -p 0x8000 \
     --vendor-name "MyCompany" \
     --product-name "Smart Switch" \
     --hw-ver 1 \

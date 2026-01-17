@@ -13,7 +13,7 @@ The M5NanoC6 Switch is a Matter-enabled smart switch that works with Apple Home,
 > **⚠️ SECURITY WARNING - DEVELOPMENT DEVICE**
 >
 > This device uses **test-only credentials** and is **NOT secure for production use**:
-> - Uses publicly known test Vendor ID (0xFFF2)
+> - Uses publicly known test Vendor ID (0xFFF1)
 > - No flash encryption (credentials readable from device)
 > - Debug interfaces enabled
 > - Test pairing codes are public knowledge
@@ -229,5 +229,5 @@ For issues or questions:
 **Device Information:**
 - Vendor: M5Stack
 - Product: M5NanoC6 Switch
-- Vendor ID: 0xFFF2
-- Product ID: 0x0010
+- Vendor ID: 0xFFF1
+- Product ID: 0x8000
