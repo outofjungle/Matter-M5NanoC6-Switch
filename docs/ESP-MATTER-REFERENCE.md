@@ -2,6 +2,23 @@
 
 This comprehensive guide covers building Matter switch devices on ESP32-C6 using Espressif's SDK for Matter.
 
+> **⚠️ NEVER USE TEST CREDENTIALS IN PRODUCTION**
+>
+> **CRITICAL SECURITY WARNING:**
+> - Test Vendor IDs (0xFFF1, 0xFFF2, 0xFFF3, 0xFFF4) are **explicitly forbidden** for production use per Matter specification
+> - Example DAC providers use **publicly known certificates** - any device using them can be impersonated
+> - Default pairing codes (20202021, etc.) are **public knowledge**
+> - Using test credentials in production violates Matter certification requirements
+>
+> **Production Requirements:**
+> - Obtain official Vendor ID from CSA (Connectivity Standards Alliance): https://csa-iot.org
+> - Use production Device Attestation Certificates (DAC) from your Product Attestation Authority
+> - Generate unique pairing codes per device
+> - Enable secure boot and flash encryption
+> - Disable all debug interfaces
+>
+> See [PRODUCTION-SECURITY-CHECKLIST.md](PRODUCTION-SECURITY-CHECKLIST.md) for complete hardening requirements.
+
 ---
 
 ## Table of Contents
@@ -27,10 +44,12 @@ Create a custom configuration header file and reference it in sdkconfig:
 
 #define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_NAME "YourVendor"
 #define CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_NAME "Smart Switch"
-#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_ID 0xFFF1  // Test VID
+#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_ID 0xFFF1  // ⚠️ TEST ONLY - NEVER USE IN PRODUCTION
 #define CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID 0x8001
 #define CHIP_DEVICE_CONFIG_DEFAULT_DEVICE_HARDWARE_VERSION 1
 ```
+
+> **⚠️ WARNING:** Vendor ID 0xFFF1 shown above is a **test-only** value. For production, replace with your official CSA-registered Vendor ID.
 
 Add to `sdkconfig.defaults`:
 ```
@@ -57,14 +76,22 @@ esp-matter-mfg-tool \
 
 ### Default Commissioning Values
 
+> **⚠️ DEVELOPMENT ONLY - These are publicly known test values**
+
 | Parameter | Default Value | Description |
 |-----------|---------------|-------------|
-| Setup Passcode | 20202021 | Proof of possession during pairing |
+| Setup Passcode | 20202021 | Proof of possession during pairing ⚠️ TEST ONLY |
 | Discriminator | 3840 (0xF00) | Distinguishes devices during discovery |
-| Vendor ID | 0xFFF1 | Test vendor ID |
+| Vendor ID | 0xFFF1 | Test vendor ID ⚠️ FORBIDDEN IN PRODUCTION |
 | Product ID | 0x8000 | Default product ID |
-| QR Code | MT:Y.K9042C00KA0648G00 | Default onboarding QR |
-| Manual Code | 34970112332 | Manual pairing code |
+| QR Code | MT:Y.K9042C00KA0648G00 | Default onboarding QR ⚠️ PUBLIC KNOWLEDGE |
+| Manual Code | 34970112332 | Manual pairing code ⚠️ PUBLIC KNOWLEDGE |
+
+**Production devices MUST use:**
+- Unique setup passcode per device (generate randomly)
+- Your official CSA-registered Vendor ID
+- Registered Product ID for your device model
+- Unique QR codes generated per device
 
 ### QR Code Generation
 

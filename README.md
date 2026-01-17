@@ -43,6 +43,26 @@ M5NanoC6 Switch (Node)
             └── Toggle
 ```
 
+> **⚠️ DEVELOPMENT ONLY - NOT FOR PRODUCTION USE**
+>
+> This device uses **test-only Matter credentials** that are publicly known:
+> - **Vendor ID 0xFFF2**: Reserved for testing, explicitly forbidden in production
+> - **Example DAC Provider**: Uses insecure public test certificates
+> - **Test Pairing Codes**: Default credentials are public knowledge
+>
+> **Security Implications:**
+> - Any device with test credentials can be impersonated
+> - Attackers can extract secrets from flash memory (no encryption enabled)
+> - Debug interfaces remain active in default configuration
+>
+> **For production deployment**, you MUST:
+> 1. Obtain an official Vendor ID from CSA (Connectivity Standards Alliance)
+> 2. Use production Device Attestation Certificates (DAC)
+> 3. Enable secure boot and flash encryption
+> 4. Disable debug interfaces (Matter Shell, JTAG)
+>
+> See [docs/PRODUCTION-SECURITY-CHECKLIST.md](docs/PRODUCTION-SECURITY-CHECKLIST.md) for complete production hardening requirements.
+
 ### How It Works
 
 1. **Node Creation** (`app_main.cpp:217`): Creates the Matter node with device info
@@ -290,4 +310,17 @@ docker system prune -f --volumes  # Clean Docker cache
 ```
 
 ### Factory Reset
+
 Hold button for 20 seconds. LED blinks red slowly during countdown. After 20 seconds, LED turns solid red (user can release button). Device resets automatically.
+
+**Security Note:** Factory reset removes:
+- All Matter fabric credentials and access control lists
+- Thread network credentials
+- Commissioned state and pairing information
+
+However, factory reset does NOT erase:
+- Factory partition data (vendor ID, product ID, DAC certificates)
+- Application firmware
+- Persistent configuration in flash
+
+Before transferring device ownership or disposing of the device, ensure sensitive data is cleared appropriately. With flash encryption disabled (default), device secrets remain readable from flash memory even after factory reset.

@@ -10,6 +10,27 @@ The M5NanoC6 Switch is a Matter-enabled smart switch that works with Apple Home,
 - Thread network support (requires a Thread Border Router)
 - Works with all Matter-compatible ecosystems
 
+> **⚠️ SECURITY WARNING - DEVELOPMENT DEVICE**
+>
+> This device uses **test-only credentials** and is **NOT secure for production use**:
+> - Uses publicly known test Vendor ID (0xFFF2)
+> - No flash encryption (credentials readable from device)
+> - Debug interfaces enabled
+> - Test pairing codes are public knowledge
+>
+> **Suitable for:**
+> - Personal development and testing
+> - Learning Matter/Thread protocols
+> - Prototyping and experimentation
+>
+> **NOT suitable for:**
+> - Production deployment
+> - Controlling critical infrastructure
+> - Processing sensitive data
+> - Use in untrusted environments
+>
+> See [PRODUCTION-SECURITY-CHECKLIST.md](docs/PRODUCTION-SECURITY-CHECKLIST.md) for hardening requirements.
+
 ---
 
 ## Getting Started
@@ -24,6 +45,15 @@ The M5NanoC6 Switch is a Matter-enabled smart switch that works with Apple Home,
    - Google Nest WiFi Pro
    - Amazon Echo (4th gen or later)
    - Or any other Thread Border Router
+
+   **Thread Border Router Security Requirements:**
+   - Ensure your Border Router is from a trusted manufacturer
+   - Keep Border Router firmware up to date
+   - Use a secure WiFi network (WPA3 or WPA2 with strong password)
+   - Thread Border Router acts as gateway between Thread network and your home network
+   - Compromised Border Router can expose your entire Thread mesh network
+   - Do not use untrusted or unofficial Border Router firmware
+
 3. **Smartphone** with Matter-compatible app:
    - iPhone with iOS 16.5+ (Home app)
    - Android with Google Home app
@@ -39,6 +69,21 @@ When you first power on the device:
 ---
 
 ## Commissioning (Adding to Your Home)
+
+> **⚠️ BEFORE COMMISSIONING - SECURITY CONSIDERATIONS**
+>
+> Before adding this device to your network:
+> - **Network Exposure**: Once commissioned, the device joins your Thread network and can communicate with other Thread devices
+> - **Test Credentials**: This device uses publicly known test credentials - anyone with physical access can extract secrets from the device
+> - **No Encryption**: Flash memory is not encrypted - device secrets are readable with basic tools
+> - **Personal Use Only**: Only commission this device on networks you fully control
+> - **Bluetooth Range**: During commissioning, the device broadcasts via BLE - ensure you're in a trusted environment
+>
+> **Recommended:**
+> - Commission in a private location (not public spaces)
+> - Use a dedicated test/development Thread network
+> - Do not use this device to control sensitive systems
+> - For production use, see [PRODUCTION-SECURITY-CHECKLIST.md](docs/PRODUCTION-SECURITY-CHECKLIST.md)
 
 ### Using the QR Code (Recommended)
 
@@ -107,6 +152,21 @@ If you need to remove the device from your home or start over:
 - Changing Matter platforms (e.g., from Google to Apple)
 - Troubleshooting connection issues
 - Before giving the device to someone else
+
+**Security Note on Factory Reset:**
+
+Factory reset **removes** these items:
+- Matter fabric credentials and access control
+- Thread network credentials
+- Commissioning state
+
+Factory reset **does NOT remove**:
+- Device attestation certificates (DAC)
+- Factory configuration
+- Application firmware
+- **Secrets stored in flash memory** (not encrypted)
+
+**Important:** Because this device does not use flash encryption, anyone with physical access and basic tools can read secrets from the device memory even after factory reset. If transferring ownership or disposing of the device, consider the flash contents as potentially readable.
 
 ---
 
