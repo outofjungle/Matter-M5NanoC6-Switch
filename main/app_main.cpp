@@ -172,14 +172,20 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 // Button callback to toggle switch state
 static void button_toggle_cb(void *arg, void *data)
 {
-    if (!s_onoff_attribute) {
+    // Read cached attribute pointer once to avoid TOCTOU issues
+    attribute_t *attr = s_onoff_attribute;
+    if (!attr) {
         ESP_LOGW(TAG, "OnOff attribute not cached");
         return;
     }
 
     // Get current OnOff state using cached attribute pointer (fast path)
     esp_matter_attr_val_t val = esp_matter_invalid(NULL);
-    attribute::get_val(s_onoff_attribute, &val);
+    esp_err_t err = attribute::get_val(attr, &val);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get attribute value: %d", err);
+        return;
+    }
     bool current_state = val.val.b;
 
     // Toggle the state
@@ -205,9 +211,7 @@ extern "C" void app_main()
 
     // Initialize LED driver first (for visual feedback)
     s_led_handle = app_driver_led_init();
-    if (!s_led_handle) {
-        ESP_LOGE(TAG, "Failed to initialize LED driver");
-    }
+    ABORT_APP_ON_FAILURE(s_led_handle != nullptr, ESP_LOGE(TAG, "Failed to initialize LED driver"));
 
     // Create Matter node (product name set via CHIPProjectConfig.h)
     node::config_t node_config = {};  // Zero-initialize all members
@@ -229,15 +233,17 @@ extern "C" void app_main()
 
     // Cache OnOff attribute pointer for fast button toggle
     s_onoff_attribute = attribute::get(s_switch_endpoint_id, ONOFF_CLUSTER_ID, ONOFF_ATTRIBUTE_ID);
-    if (!s_onoff_attribute) {
-        ESP_LOGW(TAG, "Failed to cache OnOff attribute");
-    }
+    ABORT_APP_ON_FAILURE(s_onoff_attribute != nullptr, ESP_LOGE(TAG, "Failed to cache OnOff attribute"));
 
     // Initialize button and register callbacks
     s_button_handle = app_driver_button_init();
     if (s_button_handle) {
-        iot_button_register_cb(static_cast<button_handle_t>(s_button_handle), BUTTON_SINGLE_CLICK, button_toggle_cb, NULL);
-        app_reset_button_register(s_button_handle);
+        esp_err_t err = iot_button_register_cb(static_cast<button_handle_t>(s_button_handle), BUTTON_SINGLE_CLICK, button_toggle_cb, NULL);
+        ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to register button callback: %d", err));
+
+        err = app_reset_button_register(s_button_handle);
+        ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to register factory reset handler: %d", err));
+
         ESP_LOGI(TAG, "Button initialized with toggle and factory reset callbacks");
     }
 

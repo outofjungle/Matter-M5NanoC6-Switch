@@ -81,6 +81,12 @@ static void set_solid_red_led(void)
 // Timer callback for reset countdown and solid red phase
 static void reset_timer_cb(TimerHandle_t timer)
 {
+    // Validate LED driver is available before proceeding
+    if (!app_driver_get_led_strip()) {
+        ESP_LOGW(TAG, "LED driver not initialized, cannot display reset countdown");
+        return;
+    }
+
     ResetState state = s_reset_state.load();
 
     if (state == ResetState::COUNTDOWN) {
@@ -104,7 +110,7 @@ static void reset_timer_cb(TimerHandle_t timer)
 
         if (elapsed_ms >= RESET_SOLID_DELAY_MS) {
             // Delay complete - perform factory reset
-            xTimerStop(s_reset_timer, portMAX_DELAY);
+            xTimerStop(s_reset_timer, pdMS_TO_TICKS(100));
             s_reset_state = ResetState::IDLE;
             esp_matter::factory_reset();
         }

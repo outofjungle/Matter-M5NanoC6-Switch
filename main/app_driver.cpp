@@ -93,7 +93,12 @@ app_driver_handle_t app_driver_led_init(void)
     // Create mutex for thread-safe LED access
     s_led_mutex = xSemaphoreCreateMutex();
     if (!s_led_mutex) {
-        ESP_LOGW(TAG, "Failed to create LED mutex");
+        ESP_LOGE(TAG, "Failed to create LED mutex");
+        s_led_strip->clear(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+        free(s_led_strip);
+        s_led_strip = NULL;
+        rmt_driver_uninstall(static_cast<rmt_channel_t>(M5NANOC6_RMT_CHANNEL));
+        return NULL;
     }
 
     // Set initial LED state (off = dim blue)
@@ -103,7 +108,14 @@ app_driver_handle_t app_driver_led_init(void)
     // Pre-create identify timer to avoid allocation during operation
     s_identify_timer = xTimerCreate("identify", pdMS_TO_TICKS(LED_IDENTIFY_BLINK_MS), pdTRUE, NULL, identify_timer_cb);
     if (!s_identify_timer) {
-        ESP_LOGW(TAG, "Failed to create identify timer");
+        ESP_LOGE(TAG, "Failed to create identify timer");
+        vSemaphoreDelete(s_led_mutex);
+        s_led_mutex = NULL;
+        s_led_strip->clear(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+        free(s_led_strip);
+        s_led_strip = NULL;
+        rmt_driver_uninstall(static_cast<rmt_channel_t>(M5NANOC6_RMT_CHANNEL));
+        return NULL;
     }
 
     ESP_LOGI(TAG, "LED driver initialized on GPIO %d", M5NANOC6_LED_DATA_GPIO);
@@ -142,24 +154,30 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (!LED_LOCK()) {
-        ESP_LOGW(TAG, "LED mutex timeout");
-        return ESP_ERR_TIMEOUT;
+    // Retry logic to handle concurrent LED operations (e.g., identify blink)
+    const int MAX_RETRIES = 3;
+    for (int i = 0; i < MAX_RETRIES; i++) {
+        if (LED_LOCK()) {
+            if (power) {
+                // ON state = bright blue
+                s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_ON_G, LED_COLOR_ON_R, LED_COLOR_ON_B);
+            } else {
+                // OFF state = dim blue
+                s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
+            }
+
+            s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+            LED_UNLOCK();
+
+            ESP_LOGD(TAG, "LED set to %s", power ? "ON" : "OFF");
+            return ESP_OK;
+        }
+        // Brief delay before retry
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    if (power) {
-        // ON state = bright blue
-        s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_ON_G, LED_COLOR_ON_R, LED_COLOR_ON_B);
-    } else {
-        // OFF state = dim blue
-        s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
-    }
-
-    s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
-    LED_UNLOCK();
-
-    ESP_LOGD(TAG, "LED set to %s", power ? "ON" : "OFF");
-    return ESP_OK;
+    ESP_LOGE(TAG, "LED mutex timeout after %d retries", MAX_RETRIES);
+    return ESP_ERR_TIMEOUT;
 }
 
 esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
