@@ -1,84 +1,161 @@
 # Helper Scripts
 
-This directory contains helper scripts for ESP32-C6 development with Docker on macOS.
+This directory contains helper scripts for Matter device development.
 
-## RFC2217 Serial Port Forwarding
+## generate_pairing_config.py
 
-### ser2net Scripts
+Generates Matter commissioning configuration including QR codes and SPAKE2+ verifiers.
 
-Start and stop the RFC2217 serial port server on macOS:
+### Usage
 
-- `ser2net-start.sh` - Start ser2net server (auto-detects ESP32-C6)
-- `ser2net-stop.sh` - Stop ser2net server
-
-### Docker Development Scripts
-
-Use these scripts for common ESP-IDF operations from Docker:
-
-- `docker-flash.sh` - Flash firmware to ESP32-C6
-- `docker-monitor.sh` - Monitor serial output
-- `docker-flash-monitor.sh` - Flash and monitor in one command
-
-## Quick Start
-
-### 1. Connect Device
-
-Connect your ESP32-C6 to your Mac via USB.
-
-### 2. Start Serial Port Server
-
-In one terminal:
+**Via Makefile (recommended):**
 
 ```bash
-./scripts/ser2net-start.sh
+# Generate random pairing code and QR image
+make generate-pairing
 ```
 
-Keep this running while you develop.
+This creates:
+- `main/include/CHIPPairingConfig.h` - C header with pairing configuration
+- `pairing_qr.png` - QR code image for commissioning
 
-### 3. Flash and Monitor
-
-In another terminal:
+**Direct usage:**
 
 ```bash
-# Build, flash, and monitor
-docker compose run --rm esp-idf idf.py build
-./scripts/docker-flash-monitor.sh
+# Generate with specific values
+python3 scripts/generate_pairing_config.py \
+    -d 3840 \
+    -p 20202021 \
+    -o main/include/CHIPPairingConfig.h \
+    --qr-image pairing_qr.png
 ```
 
-## Detailed Documentation
+### Parameters
 
-See [docs/IDF-DOCKER-MAC.md](../docs/IDF-DOCKER-MAC.md) for complete RFC2217 setup documentation.
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `-d, --discriminator` | Discriminator (0-4095) | 3840 |
+| `-p, --passcode` | Passcode (1-99999999) | 20202021 |
+| `--vendor-id` | Vendor ID (hex) | 0xFFF1 |
+| `--product-id` | Product ID (hex) | 0x8000 |
+| `--salt` | SPAKE2+ salt (base64) | U1BBS0UyUCBLZXkgU2FsdA== |
+| `--iterations` | SPAKE2+ iterations | 1000 |
+| `-o, --output` | Output header file path | - |
+| `--qr-image` | QR code PNG output | pairing_qr.png |
+| `--discovery` | Discovery capabilities (1=SoftAP, 2=BLE, 4=OnNetwork) | 2 |
 
-## Troubleshooting
+### Examples
 
-### Device Not Found
+**Generate with custom pairing code:**
 
 ```bash
-ls -la /dev/cu.*
+python3 scripts/generate_pairing_config.py \
+    -d 2400 \
+    -p 12345678 \
+    -o main/include/CHIPPairingConfig.h \
+    --qr-image pairing_qr.png
 ```
 
-Update `ser2net.yaml` with your device path if needed.
-
-### Connection Issues
+**Generate with custom vendor/product IDs:**
 
 ```bash
-# Check ser2net is running
-pgrep -f ser2net
-
-# Test connection
-nc -zv localhost 4000
-
-# Restart ser2net
-./scripts/ser2net-stop.sh
-./scripts/ser2net-start.sh
+python3 scripts/generate_pairing_config.py \
+    -d 3840 \
+    -p 20202021 \
+    --vendor-id 0x1234 \
+    --product-id 0x5678 \
+    -o main/include/CHIPPairingConfig.h
 ```
 
-## Why RFC2217?
+**Print config to stdout (no file output):**
 
-Docker for Mac does not support USB device pass-through. RFC2217 works around this limitation by:
+```bash
+python3 scripts/generate_pairing_config.py -d 3840 -p 20202021
+```
 
-1. Running a serial port server (ser2net) on the macOS host
-2. Connecting to it from Docker containers over TCP/IP
-3. Tunneling serial data between Docker and the physical device
+### What It Generates
 
-This allows `idf.py flash` and `idf.py monitor` to work from within Docker containers.
+The script generates:
+
+1. **SPAKE2+ Verifier** - Cryptographic verifier for secure commissioning
+2. **QR Code** - Matter onboarding QR code (MT: format)
+3. **Manual Pairing Code** - 11-digit code for manual entry
+4. **C Header** - Complete configuration for CHIPPairingConfig.h
+
+### Security Notes
+
+**⚠️ IMPORTANT for Production:**
+
+- **Random Passcodes**: Generate unique passcodes per device (not 20202021!)
+- **Avoid Invalid Codes**: Script rejects invalid passcodes per Matter spec
+- **Unique QR Codes**: Each device should have a unique QR code
+- **Secure Storage**: Protect pairing codes during manufacturing
+
+Invalid passcodes (automatically rejected):
+- 00000000, 11111111, 22222222, 33333333, 44444444
+- 55555555, 66666666, 77777777, 88888888, 99999999
+- 12345678, 87654321
+
+### Dependencies
+
+**In Docker (already installed):**
+- `ecdsa` - For SPAKE2+ calculations
+- `qrcode` - For QR code generation
+- `pillow` - For image handling
+
+The script runs in Docker via `make generate-pairing`, so no host installation needed.
+
+### Discovery Capabilities
+
+The `--discovery` parameter sets the commissioning discovery method:
+
+| Value | Method | Description |
+|-------|--------|-------------|
+| 1 | SoftAP | WiFi Access Point |
+| 2 | BLE | Bluetooth Low Energy (default) |
+| 4 | OnNetwork | Already on network |
+
+For Thread devices commissioning via BLE (like ESP32-C6), use `2` (default).
+
+### Output Format
+
+**Console Output:**
+```
+======================================================================
+Matter Pairing Configuration
+======================================================================
+
+Vendor ID:      0xFFF1
+Product ID:     0x8000
+Discriminator:  3840 (0xF00)
+Passcode:       20202021
+
+QR Code:        MT:Y.K9042C00KA0648G00
+Manual Code:    34970112332
+```
+
+**CHIPPairingConfig.h:**
+```c
+#pragma once
+
+/* Commissioning Parameters */
+#define CHIP_DEVICE_CONFIG_USE_TEST_SETUP_DISCRIMINATOR 0xF00
+#define CHIP_DEVICE_CONFIG_USE_TEST_SETUP_PIN_CODE 20202021
+
+/* SPAKE2+ Parameters */
+#define CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT 1000
+#define CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_SALT "U1BBS0UyUCBLZXkgU2FsdA=="
+#define CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_VERIFIER "..."
+```
+
+### Workflow
+
+1. Generate pairing config: `make generate-pairing`
+2. Rebuild firmware: `make build`
+3. Flash to device: `make flash`
+4. Commission using the generated QR code or manual code
+
+### References
+
+- [Matter Specification - Section 5.1.7](https://csa-iot.org/developer-resource/specifications-download-request/) - Setup Code Format
+- [SPAKE2+ Algorithm](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-spake2-26) - Cryptographic details

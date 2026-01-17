@@ -87,7 +87,6 @@ The esp-matter SDK handles cluster creation automatically based on the device ty
 - **Docker Desktop** or Docker Engine + Docker Compose v2+
 - macOS, Linux, or Windows with WSL2
 - USB serial port access (for flashing)
-- Python 3 (for pairing QR code generation)
 
 No ESP-IDF or esp-matter installation required - everything runs in Docker containers!
 
@@ -117,8 +116,8 @@ make image-build
 ```
 
 This creates a self-contained Docker image with:
-- ESP-IDF v5.3.4
-- ESP-Matter SDK (latest)
+- ESP-IDF v5.4.1
+- ESP-Matter SDK v1.5
 - All build tools and dependencies
 
 **Note**: This is a one-time step. The image is cached locally.
