@@ -109,12 +109,12 @@ size-files: ## Show size breakdown by source files
 #------------------------------------------------------------------------------
 
 generate-pairing: ## Generate random pairing code and QR image
-	@python3 -c "import random; \
+	@$(DOCKER_RUN) sh -c "python3 -c \"import random; \
 invalid={0,11111111,22222222,33333333,44444444,55555555,66666666,77777777,88888888,99999999,12345678,87654321}; \
 d=random.randint(0,4095); \
 p=random.randint(1,99999999); \
 exec('while p in invalid: p=random.randint(1,99999999)'); \
-print(f'{d} {p}')" | xargs -n2 sh -c 'python3 scripts/generate_pairing_config.py -d $$0 -p $$1 -o $(PAIRING_CONFIG) --qr-image $(PAIRING_QR_IMAGE)'
+print(f'{d} {p}')\" | xargs -n2 sh -c 'python3 /project/scripts/generate_pairing_config.py -d \$$0 -p \$$1 -o /project/$(PAIRING_CONFIG) --qr-image /project/$(PAIRING_QR_IMAGE)'"
 
 #------------------------------------------------------------------------------
 # Help
