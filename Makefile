@@ -36,7 +36,7 @@ image-build: ## Build Docker image with ESP-Matter SDK (~2-3GB, takes 10-20 min 
 	$(DOCKER_COMPOSE) build
 
 image-pull: ## Pull base ESP-IDF image
-	docker pull espressif/idf:v5.3.4
+	docker pull espressif/esp-matter:release-v1.5_idf_v5.4.1
 
 image-status: ## Show Docker image info
 	@echo "Checking Docker images..."

@@ -1,7 +1,7 @@
 # ESP-IDF Docker Image for Matter Development
 # Minimal image - ESP-Matter is mounted from host
 
-FROM espressif/idf:v5.4.1
+FROM espressif/esp-matter:release-v1.5_idf_v5.4.1
 
 # Install additional dependencies needed for Matter
 RUN apt-get update && apt-get install -y \
