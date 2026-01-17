@@ -80,6 +80,8 @@ monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
 	fi
 
 flash-monitor: flash ## Flash and immediately open monitor
+	@echo "Waiting for device to reset..."
+	@sleep 2
 	@$(MAKE) monitor
 
 erase: ## Erase flash (factory reset) using host esptool
