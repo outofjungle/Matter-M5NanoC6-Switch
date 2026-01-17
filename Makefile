@@ -61,24 +61,30 @@ menuconfig: ## Open SDK configuration (interactive)
 	$(DOCKER_RUN) idf.py menuconfig
 
 #------------------------------------------------------------------------------
-# Flash & Monitor
+# Flash & Monitor (using host esptool)
 #------------------------------------------------------------------------------
 
-flash: ## Flash firmware to device
+flash: ## Flash firmware to device using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) flash
+	@test -f build/flash_args || (echo "Error: Build first with 'make build'" && exit 1)
+	cd build && esptool --port $(PORT) write_flash @flash_args
 
-monitor: ## Serial monitor (Ctrl+] to exit)
+monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) monitor
+	@if command -v esp-idf-monitor >/dev/null 2>&1; then \
+		echo "Using esp-idf-monitor (Ctrl+] to exit)"; \
+		esp-idf-monitor --port $(PORT) build/M5NanoC6-Switch.elf; \
+	else \
+		echo "Using screen for monitoring (Ctrl+A then K to exit)"; \
+		screen $(PORT) 115200; \
+	fi
 
-flash-monitor: ## Flash and immediately open monitor
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf idf.py -p $(PORT) flash monitor
+flash-monitor: flash ## Flash and immediately open monitor
+	@$(MAKE) monitor
 
-erase: ## Erase flash (factory reset)
+erase: ## Erase flash (factory reset) using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	$(DOCKER_COMPOSE) run --rm --device=$(PORT):$(PORT) esp-idf esptool.py --port $(PORT) erase_flash
+	esptool --port $(PORT) erase_flash
 
 #------------------------------------------------------------------------------
 # Development Tools
