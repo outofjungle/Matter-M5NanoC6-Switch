@@ -1,5 +1,7 @@
 /*
    M5NanoC6 Matter Switch - Factory Reset Handler Header
+
+   Factory reset by holding button for 20 seconds while device is running.
 */
 
 #pragma once
@@ -13,8 +15,8 @@ extern "C" {
 /**
  * @brief Register factory reset button callbacks
  *
- * Registers long press (hold) to trigger factory reset flag,
- * and press up to execute factory reset.
+ * Registers long press (20s hold) to trigger factory reset with
+ * LED countdown indication.
  *
  * @param handle Button handle from app_driver_button_init()
  * @return ESP_OK on success

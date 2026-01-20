@@ -1,8 +1,16 @@
-# Matter M5NanoC6 Switch - Docker-based Makefile
-# All builds run in Docker containers - no local ESP-IDF installation needed
+# Matter M5NanoC6 Switch - Dual Build Environment Makefile
+# Supports both local ESP-IDF and Docker-based builds
+#
+# Local builds (default, proven working):
+#   make build, make flash, make monitor, make clean, make menuconfig
+#
+# Docker builds (prefixed):
+#   make docker-build, make docker-flash, make docker-monitor, etc.
 
 .PHONY: all build clean fullclean flash monitor monitor-log erase \
-        menuconfig generate-pairing shell image-build help
+        menuconfig generate-pairing shell image-build help \
+        docker-build docker-clean docker-fullclean docker-menuconfig \
+        docker-monitor docker-shell docker-size
 
 # Default target
 all: build
@@ -47,30 +55,42 @@ image-status: ## Show Docker image info
 	@docker images | grep -E "REPOSITORY|esp|matter" || echo "No ESP images found"
 
 #------------------------------------------------------------------------------
-# Build
+# Local Build (default - requires local ESP-IDF installation)
 #------------------------------------------------------------------------------
 
-build: ## Build firmware in Docker container
-	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) build
+build: ## Build firmware locally
+	idf.py -D IDF_TARGET=$(TARGET) build
 
 clean: ## Clean build artifacts
-	$(DOCKER_RUN) idf.py fullclean
-
-fullclean: ## Full clean (removes build, sdkconfig, managed_components)
-	$(DOCKER_RUN) sh -c "cd /project && rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
+	idf.py fullclean
 
 rebuild: fullclean build ## Full clean and rebuild from scratch
 
 menuconfig: ## Open SDK configuration (interactive)
+	idf.py menuconfig
+
+#------------------------------------------------------------------------------
+# Docker Build
+#------------------------------------------------------------------------------
+
+docker-build: ## Build firmware in Docker container
+	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) build
+
+docker-clean: ## Clean build artifacts in Docker
+	$(DOCKER_RUN) idf.py fullclean
+
+docker-rebuild: docker-fullclean docker-build ## Full clean and rebuild in Docker
+
+docker-menuconfig: ## Open SDK configuration in Docker (interactive)
 	$(DOCKER_RUN) idf.py menuconfig
 
 #------------------------------------------------------------------------------
-# Flash & Monitor (using host esptool)
+# Flash & Monitor (shared - uses host esptool)
 #------------------------------------------------------------------------------
 
 flash: ## Flash firmware to device using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	@test -f build/flash_args || (echo "Error: Build first with 'make build'" && exit 1)
+	@test -f build/flash_args || (echo "Error: Build first with 'make build' or 'make docker-build'" && exit 1)
 	cd build && esptool --port $(PORT) write_flash @flash_args
 
 monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
@@ -82,6 +102,9 @@ monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
 		echo "Using screen for monitoring (Ctrl+A then K to exit)"; \
 		screen $(PORT) 115200; \
 	fi
+
+docker-monitor: ## Serial monitor in Docker (for debugging)
+	$(DOCKER_RUN) sh -c "screen $(PORT) 115200"
 
 monitor-log: ## Serial monitor with logging to file
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
@@ -106,20 +129,38 @@ erase: ## Erase flash (factory reset) using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
 	esptool --port $(PORT) erase_flash
 
+fullclean: ## Full clean (removes build, sdkconfig, managed_components)
+	@echo "Cleaning build artifacts..."
+	rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock
+
+docker-fullclean: ## Full clean in Docker
+	$(DOCKER_RUN) sh -c "cd /project && rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
+
 #------------------------------------------------------------------------------
 # Development Tools
 #------------------------------------------------------------------------------
 
-shell: ## Open interactive shell in container
-	$(DOCKER_RUN) bash
-
+# Local development tools (requires local ESP-IDF)
 size: ## Show binary size analysis
-	$(DOCKER_RUN) idf.py size
+	idf.py size
 
 size-components: ## Show size breakdown by component
-	$(DOCKER_RUN) idf.py size-components
+	idf.py size-components
 
 size-files: ## Show size breakdown by source files
+	idf.py size-files
+
+# Docker development tools
+docker-shell: ## Open interactive shell in container
+	$(DOCKER_RUN) bash
+
+docker-size: ## Show binary size analysis in Docker
+	$(DOCKER_RUN) idf.py size
+
+docker-size-components: ## Show size breakdown by component in Docker
+	$(DOCKER_RUN) idf.py size-components
+
+docker-size-files: ## Show size breakdown by source files in Docker
 	$(DOCKER_RUN) idf.py size-files
 
 #------------------------------------------------------------------------------
@@ -139,38 +180,37 @@ print(f'{d} {p}')\" | xargs -n2 sh -c 'python3 /project/scripts/generate_pairing
 #------------------------------------------------------------------------------
 
 help: ## Show this help
-	@echo "Matter M5NanoC6 Switch - Docker Build System"
+	@echo "Matter M5NanoC6 Switch - Dual Build Environment"
 	@echo ""
-	@echo "First time setup:"
-	@echo "  make image-build     Build Docker image (~10-20 min, one-time)"
-	@echo ""
-	@echo "Build:"
-	@echo "  make build           Build firmware"
+	@echo "LOCAL BUILD (default - requires local ESP-IDF):"
+	@echo "  make build           Build firmware locally"
 	@echo "  make clean           Clean build artifacts"
-	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
 	@echo "  make rebuild         Full clean + rebuild"
 	@echo "  make menuconfig      Open SDK configuration (interactive)"
+	@echo "  make size            Show binary size analysis"
 	@echo ""
-	@echo "Flash & Monitor:"
+	@echo "DOCKER BUILD (prefixed):"
+	@echo "  make image-build     Build Docker image (~10-20 min, one-time)"
+	@echo "  make docker-build    Build firmware in Docker"
+	@echo "  make docker-clean    Clean build artifacts in Docker"
+	@echo "  make docker-fullclean Full clean in Docker"
+	@echo "  make docker-rebuild  Full clean + rebuild in Docker"
+	@echo "  make docker-menuconfig Open SDK configuration in Docker"
+	@echo "  make docker-shell    Open bash shell in container"
+	@echo "  make docker-size     Show binary size analysis in Docker"
+	@echo ""
+	@echo "FLASH & MONITOR (shared - works with both build methods):"
 	@echo "  make flash           Flash firmware to device"
 	@echo "  make monitor         Open serial monitor"
 	@echo "  make monitor-log     Monitor with logging to logs/ directory"
 	@echo "  make flash-monitor   Flash and monitor"
 	@echo "  make erase           Erase flash (factory reset)"
 	@echo ""
-	@echo "Development:"
-	@echo "  make shell           Open bash shell in container"
-	@echo "  make size            Show binary size analysis"
-	@echo "  make size-components Size breakdown by component"
-	@echo "  make size-files      Size breakdown by source files"
-	@echo ""
-	@echo "Docker:"
-	@echo "  make image-build     Build Docker image"
-	@echo "  make image-pull      Pull base image"
-	@echo "  make image-status    Show Docker image info"
-	@echo ""
-	@echo "Pairing:"
+	@echo "SHARED UTILITIES:"
+	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
 	@echo "  make generate-pairing Generate random pairing code and QR"
+	@echo "  make image-pull      Pull base Docker image"
+	@echo "  make image-status    Show Docker image info"
 	@echo ""
 	@echo "Current PORT: $(PORT)"
 	@echo ""
