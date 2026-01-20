@@ -57,7 +57,7 @@ clean: ## Clean build artifacts
 	$(DOCKER_RUN) idf.py fullclean
 
 fullclean: ## Full clean (removes build, sdkconfig, managed_components)
-	$(DOCKER_RUN) sh -c "rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
+	$(DOCKER_RUN) sh -c "cd /project && rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
 
 rebuild: fullclean build ## Full clean and rebuild from scratch
 

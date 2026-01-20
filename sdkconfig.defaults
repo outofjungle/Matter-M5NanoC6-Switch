@@ -4,16 +4,6 @@
 # Target
 CONFIG_IDF_TARGET="esp32c6"
 
-# Custom CHIP project config for device naming
-CONFIG_CHIP_PROJECT_CONFIG="main/include/CHIPProjectConfig.h"
-
-# Matter Device Identity
-# Using ESP-Matter SDK defaults (test vendor/product)
-# Vendor ID: 0xFFF1 = ESP-Matter test vendor
-# Product ID: 0x8000 = Generic test product
-CONFIG_DEVICE_VENDOR_ID=0xFFF1
-CONFIG_DEVICE_PRODUCT_ID=0x8000
-
 # Flash size
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
@@ -44,7 +34,7 @@ CONFIG_ENABLE_WIFI_AP=n
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 
 # LwIP config for OpenThread
-CONFIG_LWIP_IPV6_AUTOCONFIG=n
+CONFIG_LWIP_IPV6_AUTOCONFIG=y
 CONFIG_LWIP_IPV6_NUM_ADDRESSES=8
 CONFIG_LWIP_MULTICAST_PING=y
 CONFIG_LWIP_HOOK_IP6_ROUTE_DEFAULT=y
@@ -66,31 +56,8 @@ CONFIG_LIBSODIUM_USE_MBEDTLS_SHA=y
 # FreeRTOS
 CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=y
 
-# Matter Shell (disable for production to save ~30KB RAM)
+# Matter Shell (for debugging)
 CONFIG_ENABLE_CHIP_SHELL=y
 
 # Disable ESP Insights (causes build issues with managed components)
 CONFIG_ESP_INSIGHTS_ENABLED=n
-
-# ====== Memory Optimizations ======
-# Use newlib nano for smaller footprint
-CONFIG_NEWLIB_NANO_FORMAT=y
-
-# Limit dynamic endpoints (saves heap)
-CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=2
-
-# BLE connection limits
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
-
-# Reduce log level for production (change to _WARN for release)
-CONFIG_LOG_DEFAULT_LEVEL_INFO=y
-
-# Optimize for size
-CONFIG_COMPILER_OPTIMIZATION_SIZE=y
-
-# ====== Device Attestation Certificate (DAC) Provider ======
-# Use example DAC provider for development
-# Note: For production, switch to FACTORY_PARTITION_DAC_PROVIDER
-# and provision certificates in factory partition
-CONFIG_SEC_CERT_DAC_PROVIDER=y
-CONFIG_EXAMPLE_DAC_PROVIDER=y
