@@ -12,50 +12,51 @@ all: build
 
 TARGET := esp32c6
 # Auto-detect serial port (macOS: cu.usbmodem*, Linux: ttyUSB* or ttyACM*)
-PORT ?= $(shell ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1)
+PORT ?= $(shell /bin/bash -c 'ls /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1')
 
 # Pairing configuration
 PAIRING_CONFIG := main/include/CHIPPairingConfig.h
 PAIRING_QR_IMAGE := pairing_qr.png
 
 #------------------------------------------------------------------------------
+# Environment Setup
+#------------------------------------------------------------------------------
+
+# Use fish shell with idf-init function for IDF environment
+IDF_ENV = /opt/homebrew/bin/fish -c "idf-init; and
+
+#------------------------------------------------------------------------------
 # Build
 #------------------------------------------------------------------------------
 
 build: ## Build firmware
-ifndef ESP_MATTER_PATH
-	$(error ESP_MATTER_PATH not set)
-endif
-ifndef IDF_PATH
-	$(error IDF_PATH not set)
-endif
-	idf.py -D IDF_TARGET=$(TARGET) build
+	$(IDF_ENV) idf.py -D IDF_TARGET=$(TARGET) build"
 
 clean: ## Clean build artifacts
-	idf.py clean
+	$(IDF_ENV) idf.py clean"
 
 fullclean: ## Full clean (removes build, sdkconfig, managed_components)
 	rm -rf build managed_components
 	rm -f sdkconfig sdkconfig.old dependencies.lock
 
 menuconfig: ## Open SDK configuration
-	idf.py menuconfig
+	$(IDF_ENV) idf.py menuconfig"
 
 #------------------------------------------------------------------------------
 # Flash & Monitor
 #------------------------------------------------------------------------------
 
 flash: build ## Flash firmware
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	idf.py -p $(PORT) flash
+	@/bin/bash -c 'test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)'
+	$(IDF_ENV) idf.py -p $(PORT) flash"
 
 monitor: ## Serial monitor (Ctrl+] to exit)
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	idf.py -p $(PORT) monitor
+	@/bin/bash -c 'test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)'
+	$(IDF_ENV) idf.py -p $(PORT) monitor"
 
 erase: ## Erase flash (factory reset)
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)
-	esptool.py --port $(PORT) erase_flash
+	@/bin/bash -c 'test -n "$(PORT)" || (echo "Error: No device found. Set PORT=" && exit 1)'
+	$(IDF_ENV) esptool.py --port $(PORT) erase_flash"
 
 #------------------------------------------------------------------------------
 # Pairing
