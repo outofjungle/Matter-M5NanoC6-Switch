@@ -86,9 +86,10 @@ The esp-matter SDK handles cluster creation automatically based on the device ty
 
 - **Docker Desktop** or Docker Engine + Docker Compose v2+
 - macOS, Linux, or Windows with WSL2
-- USB serial port access (for flashing)
+- **esptool** installed on host (for flashing)
+- USB serial port access
 
-No ESP-IDF or esp-matter installation required - everything runs in Docker containers!
+No ESP-IDF or esp-matter installation required - firmware builds run in Docker!
 
 ## Setup
 
@@ -107,7 +108,27 @@ sudo usermod -aG docker $USER
 sudo apt-get install docker-compose-plugin
 ```
 
-### 2. Build Docker Image (First Time Only)
+### 2. Install esptool (Required for Flashing)
+
+Install esptool on your host machine:
+
+**macOS:**
+```bash
+brew install esptool
+```
+
+**Linux:**
+```bash
+pip3 install --user esptool
+# Or: sudo apt-get install esptool
+```
+
+**Optional:** Install esp-idf-monitor for enhanced serial monitoring:
+```bash
+pip3 install --user esp-idf-monitor
+```
+
+### 3. Build Docker Image (First Time Only)
 
 Build the Docker image with ESP-IDF and ESP-Matter SDK (~2-3GB, takes 10-20 minutes):
 
@@ -122,7 +143,7 @@ This creates a self-contained Docker image with:
 
 **Note**: This is a one-time step. The image is cached locally.
 
-### 3. Serial Port Access (Linux only)
+### 4. Serial Port Access (Linux only)
 
 Add your user to the dialout group:
 ```bash
@@ -132,42 +153,42 @@ sudo usermod -aG dialout $USER
 
 ## Build and Flash
 
-All commands run in Docker containers:
+Build firmware in Docker, flash/monitor with host tools:
 
 ```bash
-make build      # Build firmware
-make flash      # Flash to device
-make monitor    # Serial monitor (Ctrl+] to exit)
+make build      # Build firmware in Docker
+make flash      # Flash to device with host esptool
+make monitor    # Serial monitor with logging (Ctrl+] to exit)
 ```
 
 ### All Make Targets
 
 ```bash
-# Build
-make build            # Build firmware in container
+# Build (Docker - default)
+make build            # Build firmware in Docker
 make clean            # Clean build artifacts
-make fullclean        # Full clean (build, sdkconfig, deps)
-make menuconfig       # SDK configuration (interactive)
 make rebuild          # Full clean + rebuild
+make menuconfig       # SDK configuration (interactive)
 
-# Flash & Monitor
+# Build (Local - requires ESP-IDF installation)
+make local-build      # Build firmware locally
+make local-clean      # Clean build artifacts locally
+make local-rebuild    # Full clean + rebuild locally
+make local-menuconfig # SDK configuration locally
+
+# Flash & Monitor (host tools)
 make flash            # Flash firmware to device
-make monitor          # Serial monitor (Ctrl+] to exit)
-make flash-monitor    # Flash and immediately monitor
+make monitor          # Monitor with logging to logs/
 make erase            # Erase flash (factory reset)
 
-# Development
-make shell            # Open bash shell in container
-make size             # Show binary size analysis
-make size-components  # Size breakdown by component
-make size-files       # Size breakdown by files
-
-# Docker
-make image-build      # Build Docker image
+# Docker Management
+make image-build      # Build Docker image (~10-20 min, one-time)
 make image-pull       # Pull base ESP-IDF image
 make image-status     # Show Docker image info
+make shell            # Open bash shell in container
 
-# Pairing
+# Utilities
+make fullclean        # Full clean (build, sdkconfig, deps)
 make generate-pairing # Generate random pairing code and QR
 ```
 
@@ -175,6 +196,27 @@ make generate-pairing # Generate random pairing code and QR
 
 ```bash
 make flash PORT=/dev/ttyUSB0
+```
+
+### Advanced: Running ESP-IDF Commands Directly
+
+For advanced debugging and analysis, open a shell in the Docker container:
+
+```bash
+make shell
+```
+
+Then run any ESP-IDF commands. Note that you're already in `/project` directory:
+
+```bash
+# Inside the container shell (already in /project):
+idf.py size                # Show binary size analysis
+idf.py size-components     # Size breakdown by component
+idf.py size-files          # Size breakdown by source files
+idf.py -D SDKCONFIG_DEFAULTS=sdkconfig.defaults reconfigure  # Reconfigure
+
+# Or use explicit path:
+idf.py -C /project size
 ```
 
 ## Commissioning
@@ -247,12 +289,9 @@ If files in `build/` are owned by root:
 ```bash
 # Fix ownership
 sudo chown -R $USER:$USER build/ managed_components/
-
-# Prevention: Ensure UID/GID are exported
-export UID=$(id -u)
-export GID=$(id -g)
-make build
 ```
+
+The ESP-IDF Docker image should handle file permissions automatically.
 
 ### Device Not Detected
 
@@ -275,17 +314,20 @@ make flash PORT=/dev/cu.usbmodem14201  # macOS
 make flash PORT=/dev/ttyUSB0           # Linux
 ```
 
-### Container Can't Access Serial Port
+### esptool Not Found
 
-**Linux**: Ensure user is in dialout group
+Install esptool on your host machine:
+
+**macOS:**
 ```bash
-sudo usermod -aG dialout $USER
-# Log out and back in
+brew install esptool
 ```
 
-**macOS**: Device pass-through should work automatically
-
-**Alternative**: Edit `docker-compose.yml` and uncomment `privileged: true`
+**Linux:**
+```bash
+pip3 install --user esptool
+# Or: sudo apt-get install esptool
+```
 
 ### Slow Builds
 

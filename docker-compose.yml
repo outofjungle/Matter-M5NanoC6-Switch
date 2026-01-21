@@ -11,6 +11,9 @@ services:
       # Mount project source code (includes build directory)
       - .:/project
 
+    # Set default working directory
+    # Note: idf.py commands in Makefile still use -C /project explicitly
+    # because ESP-IDF activation may change the working directory
     working_dir: /project
 
     environment:

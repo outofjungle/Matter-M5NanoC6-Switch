@@ -1,12 +1,12 @@
 # ESP-IDF Docker on macOS
 
-This document covers using the ESP-IDF Docker image for building firmware on macOS, and the hybrid approach used to work around macOS Docker limitations.
+This document covers using the ESP-IDF Docker image for building firmware on macOS.
 
 ## Overview
 
-This project uses a **hybrid Docker + host tools approach**:
+This project uses:
 - **Docker containers** for building firmware (ensures consistent, reproducible builds)
-- **Host-native tools** for flashing and monitoring (works around Docker USB limitations)
+- **Host-native tools** for flashing and monitoring (direct USB access)
 
 ## Why This Approach?
 
@@ -18,14 +18,14 @@ This is a fundamental limitation of how Docker works on macOS (it runs in a virt
 
 This means you cannot use `idf.py flash` or `idf.py monitor` directly from within Docker containers on macOS.
 
-## The Solution: Hybrid Approach
+## The Solution
 
-### 1. Build in Docker
+### 1. Build in Docker (Default)
 
 All firmware compilation happens in Docker containers using the official ESP-Matter image:
 
 ```bash
-make build          # Runs idf.py build in Docker
+make build          # Build firmware in Docker
 make menuconfig     # Interactive config in Docker
 make clean          # Clean build in Docker
 ```
@@ -38,12 +38,12 @@ make clean          # Clean build in Docker
 
 ### 2. Flash/Monitor with Host Tools
 
-Flashing and serial monitoring use native macOS tools:
+Flashing and serial monitoring use native macOS tools (esptool installed via Homebrew):
 
 ```bash
-make flash          # Uses host esptool
-make monitor        # Uses host esp-idf-monitor or screen
-make flash-monitor  # Flash then monitor
+make flash          # Flash with host esptool
+make monitor        # Monitor with logging
+make erase          # Erase flash
 ```
 
 **Benefits:**
@@ -61,19 +61,19 @@ make flash-monitor  # Flash then monitor
 
 ### Install Host Tools
 
-Install esptool (required for flashing):
+**Required:** Install esptool for flashing:
 
 ```bash
 brew install esptool
 ```
 
-Optionally install esp-idf-monitor for enhanced serial monitoring (colored output, stack trace decoding):
+**Optional:** Install esp-idf-monitor for enhanced serial monitoring (colored output, stack trace decoding):
 
 ```bash
-pip3 install --user --break-system-packages esp-idf-monitor
+pip3 install --user esp-idf-monitor
 ```
 
-Or use the built-in `screen` command (already on macOS) if you prefer not to install esp-idf-monitor.
+The monitor target will automatically use esp-idf-monitor if available, otherwise falls back to `screen` (built into macOS).
 
 ### Build Docker Image
 
@@ -97,15 +97,12 @@ This downloads and builds the Docker image (~2-3GB, takes 10-20 minutes first ti
    make flash
    ```
 
-3. **Monitor serial output:**
+3. **Monitor serial output with logging:**
    ```bash
    make monitor
    ```
 
-   Or do both at once:
-   ```bash
-   make flash-monitor
-   ```
+   Logs are automatically saved to `logs/monitor_YYYYMMDD_HHMMSS.log`
 
 ### Configuration Changes
 
@@ -124,8 +121,13 @@ make flash          # Flash updated firmware
 When you run `make build`, the Makefile:
 1. Runs `docker-compose run --rm esp-idf`
 2. Mounts your project directory to `/project` in the container
-3. Executes `idf.py build` inside the container
+3. Executes `idf.py -C /project -D IDF_TARGET=esp32c6 build` inside the container
 4. Outputs build artifacts to `build/` directory on your Mac
+
+**Why `-C /project` is needed:**
+- Even though `docker-compose.yml` sets `working_dir: /project`, the ESP-IDF activation script (`. $IDF_PATH/export.sh`) may change the working directory
+- The `-C /project` flag explicitly tells `idf.py` where to find our project's `CMakeLists.txt`
+- This ensures the build always targets the correct project directory
 
 The build directory is shared between Docker and your Mac, so the host tools can access the compiled firmware.
 
@@ -179,19 +181,22 @@ Open a bash shell inside the container:
 make shell
 ```
 
-This is useful for running ESP-IDF commands directly or debugging build issues.
-
-### Size Analysis
-
-Check firmware size:
+Inside the container, you can run any ESP-IDF commands:
 
 ```bash
-make size               # Overall size
-make size-components    # Size by component
-make size-files         # Size by source file
-```
+# Size analysis
+idf.py size                # Overall size
+idf.py size-components     # Size by component
+idf.py size-files          # Size by source file
 
-These commands run in Docker and analyze the build output.
+# Configuration
+idf.py menuconfig          # Interactive config
+idf.py reconfigure         # Reconfigure from sdkconfig.defaults
+
+# Advanced debugging
+idf.py app                 # Build only app (not bootloader)
+idf.py partition-table     # Show partition table
+```
 
 ## Troubleshooting
 
@@ -219,7 +224,7 @@ If device isn't showing up:
 
 ### Build Artifacts Owned by Root
 
-This shouldn't happen with the current Makefile (it sets UID/GID), but if it does:
+The ESP-IDF Docker image handles file permissions automatically. If you encounter root-owned files:
 
 ```bash
 sudo chown -R $USER:$USER build/ managed_components/
@@ -236,18 +241,6 @@ Subsequent builds are much faster due to:
 - Docker layer caching
 - Incremental compilation
 - Persistent build volume
-
-## File Permissions
-
-The docker-compose.yml automatically maps your user ID to the container:
-
-```yaml
-environment:
-  - USER_UID=${UID}
-  - USER_GID=${GID}
-```
-
-This ensures build artifacts are owned by your user, not root.
 
 ## References
 

@@ -16,8 +16,8 @@ RUN export IDF_PATH=/opt/espressif/esp-idf IDF_PATH_FORCE=1 && \
     . ${IDF_PATH}/export.sh && \
     pip install --no-cache-dir qrcode pillow
 
-# Set working directory
-WORKDIR /workspace
+# Set working directory (matches docker-compose.yml)
+WORKDIR /project
 
 # Default command
 CMD ["/bin/bash"]

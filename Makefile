@@ -1,16 +1,19 @@
-# Matter M5NanoC6 Switch - Dual Build Environment Makefile
-# Supports both local ESP-IDF and Docker-based builds
+# Matter M5NanoC6 Switch - Makefile
+# Docker-based build environment (default) with host tools for flashing/monitoring
 #
-# Local builds (default, proven working):
-#   make build, make flash, make monitor, make clean, make menuconfig
+# Docker builds (default):
+#   make build, make clean, make menuconfig, make rebuild
 #
-# Docker builds (prefixed):
-#   make docker-build, make docker-flash, make docker-monitor, etc.
+# Local builds (requires ESP-IDF):
+#   make local-build, make local-clean, make local-menuconfig
+#
+# Flash & Monitor (host tools):
+#   make flash, make erase, make monitor
 
-.PHONY: all build clean fullclean flash monitor monitor-log erase \
+.PHONY: all build clean fullclean rebuild flash monitor erase \
         menuconfig generate-pairing shell image-build help \
-        docker-build docker-clean docker-fullclean docker-menuconfig \
-        docker-monitor docker-shell docker-size
+        local-build local-clean local-rebuild local-menuconfig \
+        image-pull image-status
 
 # Default target
 all: build
@@ -36,10 +39,6 @@ LOG_FILE := $(LOGS_DIR)/monitor_$(shell date +%Y%m%d_%H%M%S).log
 DOCKER_COMPOSE := docker-compose
 DOCKER_RUN := $(DOCKER_COMPOSE) run --rm esp-idf
 
-# Set UID/GID for file ownership (prevents root-owned files)
-export UID := $(shell id -u)
-export GID := $(shell id -g)
-
 #------------------------------------------------------------------------------
 # Docker Image Management
 #------------------------------------------------------------------------------
@@ -55,75 +54,61 @@ image-status: ## Show Docker image info
 	@docker images | grep -E "REPOSITORY|esp|matter" || echo "No ESP images found"
 
 #------------------------------------------------------------------------------
-# Local Build (default - requires local ESP-IDF installation)
+# Docker Build (default)
 #------------------------------------------------------------------------------
+# Note: -C /project is required even though docker-compose sets working_dir=/project
+# because the ESP-IDF activation script may change the working directory.
+# The -C flag explicitly tells idf.py where to find our project's CMakeLists.txt.
 
-build: ## Build firmware locally
-	idf.py -D IDF_TARGET=$(TARGET) build
-
-clean: ## Clean build artifacts
-	idf.py fullclean
-
-rebuild: fullclean build ## Full clean and rebuild from scratch
-
-menuconfig: ## Open SDK configuration (interactive)
-	idf.py menuconfig
-
-#------------------------------------------------------------------------------
-# Docker Build
-#------------------------------------------------------------------------------
-
-docker-build: ## Build firmware in Docker container
+build: ## Build firmware in Docker container
 	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) build
 
-docker-clean: ## Clean build artifacts in Docker
+clean: ## Clean build artifacts in Docker
 	$(DOCKER_RUN) idf.py fullclean
 
-docker-rebuild: docker-fullclean docker-build ## Full clean and rebuild in Docker
+rebuild: fullclean build ## Full clean and rebuild in Docker
 
-docker-menuconfig: ## Open SDK configuration in Docker (interactive)
+menuconfig: ## Open SDK configuration in Docker (interactive)
 	$(DOCKER_RUN) idf.py menuconfig
 
 #------------------------------------------------------------------------------
-# Flash & Monitor (shared - uses host esptool)
+# Local Build (requires local ESP-IDF installation)
+#------------------------------------------------------------------------------
+
+local-build: ## Build firmware locally with installed ESP-IDF
+	idf.py -D IDF_TARGET=$(TARGET) build
+
+local-clean: ## Clean build artifacts locally
+	idf.py fullclean
+
+local-rebuild: fullclean local-build ## Full clean and rebuild locally
+
+local-menuconfig: ## Open SDK configuration locally (interactive)
+	idf.py menuconfig
+
+#------------------------------------------------------------------------------
+# Flash & Monitor (uses host esptool)
 #------------------------------------------------------------------------------
 
 flash: ## Flash firmware to device using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	@test -f build/flash_args || (echo "Error: Build first with 'make build' or 'make docker-build'" && exit 1)
+	@test -f build/flash_args || (echo "Error: Build first with 'make build'" && exit 1)
 	cd build && esptool --port $(PORT) write_flash @flash_args
 
-monitor: ## Serial monitor (screen: Ctrl+A K, esp-idf-monitor: Ctrl+])
-	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
-	@if command -v esp-idf-monitor >/dev/null 2>&1; then \
-		echo "Using esp-idf-monitor (Ctrl+] to exit)"; \
-		esp-idf-monitor --port $(PORT) build/M5NanoC6-Switch.elf; \
-	else \
-		echo "Using screen for monitoring (Ctrl+A then K to exit)"; \
-		screen $(PORT) 115200; \
-	fi
-
-docker-monitor: ## Serial monitor in Docker (for debugging)
-	$(DOCKER_RUN) sh -c "screen $(PORT) 115200"
-
-monitor-log: ## Serial monitor with logging to file
+monitor: ## Serial monitor with logging (esp-idf-monitor: Ctrl+], screen: Ctrl+A K)
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
 	@mkdir -p $(LOGS_DIR)
 	@echo "Logging to $(LOG_FILE)"
-	@echo "Press Ctrl+C to stop logging"
 	@if command -v esp-idf-monitor >/dev/null 2>&1; then \
+		echo "Using esp-idf-monitor (Ctrl+] to exit)"; \
 		esp-idf-monitor --port $(PORT) build/M5NanoC6-Switch.elf 2>&1 | tee $(LOG_FILE); \
 	else \
+		echo "Using screen for monitoring (Ctrl+A then K to exit)"; \
 		stty -f $(PORT) 115200 raw -echo; \
 		cat $(PORT) | while IFS= read -r line; do \
 			echo "$$(date '+%H:%M:%S.%3N') $$line" | tee -a $(LOG_FILE); \
 		done; \
 	fi
-
-flash-monitor: flash ## Flash and immediately open monitor
-	@echo "Waiting for device to reset..."
-	@sleep 2
-	@$(MAKE) monitor
 
 erase: ## Erase flash (factory reset) using host esptool
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
@@ -133,35 +118,12 @@ fullclean: ## Full clean (removes build, sdkconfig, managed_components)
 	@echo "Cleaning build artifacts..."
 	rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock
 
-docker-fullclean: ## Full clean in Docker
-	$(DOCKER_RUN) sh -c "cd /project && rm -rf build managed_components sdkconfig sdkconfig.old dependencies.lock"
-
 #------------------------------------------------------------------------------
-# Development Tools
+# Docker Utilities
 #------------------------------------------------------------------------------
 
-# Local development tools (requires local ESP-IDF)
-size: ## Show binary size analysis
-	idf.py size
-
-size-components: ## Show size breakdown by component
-	idf.py size-components
-
-size-files: ## Show size breakdown by source files
-	idf.py size-files
-
-# Docker development tools
-docker-shell: ## Open interactive shell in container
+shell: ## Open interactive shell in Docker container
 	$(DOCKER_RUN) bash
-
-docker-size: ## Show binary size analysis in Docker
-	$(DOCKER_RUN) idf.py size
-
-docker-size-components: ## Show size breakdown by component in Docker
-	$(DOCKER_RUN) idf.py size-components
-
-docker-size-files: ## Show size breakdown by source files in Docker
-	$(DOCKER_RUN) idf.py size-files
 
 #------------------------------------------------------------------------------
 # Pairing
@@ -180,37 +142,34 @@ print(f'{d} {p}')\" | xargs -n2 sh -c 'python3 /project/scripts/generate_pairing
 #------------------------------------------------------------------------------
 
 help: ## Show this help
-	@echo "Matter M5NanoC6 Switch - Dual Build Environment"
+	@echo "Matter M5NanoC6 Switch - Docker Build Environment"
 	@echo ""
-	@echo "LOCAL BUILD (default - requires local ESP-IDF):"
-	@echo "  make build           Build firmware locally"
+	@echo "DOCKER BUILD (default):"
+	@echo "  make build           Build firmware in Docker"
 	@echo "  make clean           Clean build artifacts"
 	@echo "  make rebuild         Full clean + rebuild"
 	@echo "  make menuconfig      Open SDK configuration (interactive)"
-	@echo "  make size            Show binary size analysis"
 	@echo ""
-	@echo "DOCKER BUILD (prefixed):"
-	@echo "  make image-build     Build Docker image (~10-20 min, one-time)"
-	@echo "  make docker-build    Build firmware in Docker"
-	@echo "  make docker-clean    Clean build artifacts in Docker"
-	@echo "  make docker-fullclean Full clean in Docker"
-	@echo "  make docker-rebuild  Full clean + rebuild in Docker"
-	@echo "  make docker-menuconfig Open SDK configuration in Docker"
-	@echo "  make docker-shell    Open bash shell in container"
-	@echo "  make docker-size     Show binary size analysis in Docker"
+	@echo "LOCAL BUILD (requires ESP-IDF installation):"
+	@echo "  make local-build     Build firmware locally"
+	@echo "  make local-clean     Clean build artifacts locally"
+	@echo "  make local-rebuild   Full clean + rebuild locally"
+	@echo "  make local-menuconfig Open SDK configuration locally"
 	@echo ""
-	@echo "FLASH & MONITOR (shared - works with both build methods):"
+	@echo "FLASH & MONITOR (host tools):"
 	@echo "  make flash           Flash firmware to device"
-	@echo "  make monitor         Open serial monitor"
-	@echo "  make monitor-log     Monitor with logging to logs/ directory"
-	@echo "  make flash-monitor   Flash and monitor"
+	@echo "  make monitor         Monitor with logging to logs/"
 	@echo "  make erase           Erase flash (factory reset)"
 	@echo ""
-	@echo "SHARED UTILITIES:"
-	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
-	@echo "  make generate-pairing Generate random pairing code and QR"
+	@echo "DOCKER MANAGEMENT:"
+	@echo "  make image-build     Build Docker image (~10-20 min, one-time)"
 	@echo "  make image-pull      Pull base Docker image"
 	@echo "  make image-status    Show Docker image info"
+	@echo "  make shell           Open bash shell in container"
+	@echo ""
+	@echo "UTILITIES:"
+	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
+	@echo "  make generate-pairing Generate random pairing code and QR"
 	@echo ""
 	@echo "Current PORT: $(PORT)"
 	@echo ""
