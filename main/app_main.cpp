@@ -190,6 +190,17 @@ static void button_toggle_cb(void *arg, void *data)
     attribute::update(s_switch_endpoint_id, ONOFF_CLUSTER_ID, ONOFF_ATTRIBUTE_ID, &val);
 }
 
+// Get current on/off power state (used by app_reset to restore LED after cancelled reset)
+extern "C" bool app_get_current_power_state(void)
+{
+    if (!s_onoff_attribute) {
+        return false;
+    }
+    esp_matter_attr_val_t val = esp_matter_invalid(NULL);
+    attribute::get_val(s_onoff_attribute, &val);
+    return val.val.b;
+}
+
 extern "C" void app_main()
 {
     esp_err_t err = ESP_OK;

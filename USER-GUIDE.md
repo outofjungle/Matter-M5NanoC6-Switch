@@ -122,8 +122,9 @@ When you first power on the device:
 | **Bright Blue** | Switch is ON |
 | **Dim Blue** | Switch is OFF |
 | **Blinking White** | Identify command (triggered from app) |
-| **Slow Red Blink** | Factory reset countdown (hold for 20s) |
-| **Solid Red** | Factory reset in progress (can release button) |
+| **White/Red Pattern** | Factory reset binary code display (see [Recovering Your QR Code](#recovering-your-qr-code)) |
+| **Solid Green** | Factory reset cancelled - returning to previous state |
+| **Solid Red** | Factory reset confirmed - resetting device |
 
 ### App Control
 
@@ -139,15 +140,34 @@ Once commissioned, you can:
 
 If you need to remove the device from your home or start over:
 
-1. **Press and hold the button for 20 seconds**
-2. The LED will start blinking red (slow steady blink)
-3. Continue holding for the full 20 seconds
-4. After 20 seconds, the LED will turn **solid red**
-5. **You can now release the button** - factory reset is in progress
-6. The device will reset and restart automatically
-7. It will be ready for commissioning again
+### Performing a Factory Reset
 
-**When to factory reset:**
+1. **Press and hold the button**
+2. **Wait 3 seconds** (initial delay - you can release to cancel during this time)
+3. **Binary pattern displays** (~19 seconds)
+   - The LED will blink white (1) and red (0) showing the firmware configuration
+   - This pattern helps you recover your QR code later (see [Recovering Your QR Code](#recovering-your-qr-code))
+   - **Important:** Pattern is non-cancellable - it will always complete
+4. **After pattern completes**, check the LED:
+   - **Solid GREEN (3 seconds)** = Button was released, reset cancelled, LED returns to previous state
+   - **Solid RED (3 seconds)** = Button still held, factory reset will proceed
+5. If RED, device resets and restarts automatically
+6. Device will be ready for commissioning again
+
+**Total time: ~25 seconds** (3s delay + 19s pattern + 3s indicator)
+
+### Cancelling a Factory Reset
+
+You can cancel the factory reset at two points:
+
+- **During initial 3-second delay**: Release the button to cancel immediately
+- **After binary pattern completes**: Release the button before the pattern ends
+  - LED will show **solid GREEN** for 3 seconds
+  - LED returns to previous state (bright blue if ON, dim blue if OFF)
+  - No reset performed
+
+### When to Factory Reset
+
 - Moving the device to a different home
 - Changing Matter platforms (e.g., from Google to Apple)
 - Troubleshooting connection issues
@@ -167,6 +187,50 @@ Factory reset **does NOT remove**:
 - **Secrets stored in flash memory** (not encrypted)
 
 **Important:** Because this device does not use flash encryption, anyone with physical access and basic tools can read secrets from the device memory even after factory reset. If transferring ownership or disposing of the device, consider the flash contents as potentially readable.
+
+---
+
+## Recovering Your QR Code
+
+If you've lost your commissioning QR code, you can recover it by reading the binary pattern displayed during the factory reset sequence.
+
+### How to Read the Binary Pattern
+
+1. **Start the factory reset sequence** (hold button for 3 seconds)
+2. **Watch the LED pattern** for the next ~19 seconds:
+   - The pattern repeats **5 times**
+   - Each pattern shows **4 bits** in **LSB-first order** (bit 0, 1, 2, 3)
+   - **WHITE LED** = Binary 1
+   - **RED LED** = Binary 0
+   - Brief pause between bits, longer pause between repetitions
+
+3. **Decode the pattern**:
+
+   Example: If you see WHITE, RED, RED, RED (repeated 5 times)
+   - Bit 0 (rightmost): WHITE = 1
+   - Bit 1: RED = 0
+   - Bit 2: RED = 0
+   - Bit 3 (leftmost): RED = 0
+   - Binary: 0b0001 (LSB first: bit 3, bit 2, bit 1, bit 0)
+   - Decimal value: 1
+
+4. **Find your QR code**:
+   - Go to the project's GitHub releases page
+   - Find the release tagged `release-0b0001` (using your decoded value)
+   - Download the `pairing_qr.png` image from that release
+   - Use this QR code to commission your device
+
+### Binary Pattern Examples
+
+| Pattern (LSB first) | Binary | Decimal | Release Tag |
+|---------------------|--------|---------|-------------|
+| WHITE, RED, RED, RED | 0b0001 | 1 | `release-0b0001` |
+| RED, WHITE, RED, RED | 0b0010 | 2 | `release-0b0010` |
+| WHITE, WHITE, RED, RED | 0b0011 | 3 | `release-0b0011` |
+| RED, RED, WHITE, RED | 0b0100 | 4 | `release-0b0100` |
+| WHITE, RED, WHITE, RED | 0b0101 | 5 | `release-0b0101` |
+
+**Tip:** The pattern repeats 5 times - you have multiple chances to observe it. You can release the button after decoding to cancel the reset (LED will show GREEN).
 
 ---
 

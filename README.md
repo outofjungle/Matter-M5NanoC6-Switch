@@ -352,7 +352,14 @@ docker system prune -f --volumes  # Clean Docker cache
 
 ### Factory Reset
 
-Hold button for 20 seconds. LED blinks red slowly during countdown. After 20 seconds, LED turns solid red (user can release button). Device resets automatically.
+Hold button for ~25 seconds total:
+1. **Initial delay (3 seconds)** - Release to cancel
+2. **Binary pattern display (~19 seconds)** - Shows firmware config ID for QR code recovery (see [USER-GUIDE.md](USER-GUIDE.md#recovering-your-qr-code))
+3. **Result indicator (3 seconds)**:
+   - **Solid RED** = Reset will proceed (keep holding)
+   - **Solid GREEN** = Reset cancelled (button released)
+
+After solid RED, device resets automatically. LED returns to previous state after GREEN.
 
 **Security Note:** Factory reset removes:
 - All Matter fabric credentials and access control lists

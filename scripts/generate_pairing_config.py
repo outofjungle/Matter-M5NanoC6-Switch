@@ -15,6 +15,7 @@ import argparse
 import base64
 import hashlib
 import os
+import re
 import struct
 import sys
 
@@ -94,6 +95,43 @@ def generate_qrcode_manual(discriminator: int, passcode: int, vendor_id: int = 0
             return "<Install dependencies: pip install bitarray construct stdnum click>", "<N/A>"
 
 
+def read_current_config_id(filepath):
+    """Read current FIRMWARE_CONFIG_ID from header file."""
+    if not os.path.exists(filepath):
+        return 0
+    try:
+        with open(filepath, 'r') as f:
+            content = f.read()
+        match = re.search(r'#define\s+FIRMWARE_CONFIG_ID\s+(\d+)', content)
+        if match:
+            return int(match.group(1))
+    except Exception:
+        pass
+    return 0
+
+
+def confirm_changes(current_id, new_id, discriminator, passcode):
+    """Ask user to confirm all changes."""
+    print("\n" + "=" * 60)
+    print("Pairing Configuration Changes")
+    print("=" * 60)
+    print(f"  Discriminator: 0x{discriminator:03X} ({discriminator})")
+    print(f"  Passcode:      {passcode}")
+    print(f"  Config ID:     {current_id} -> {new_id} (binary: {new_id:04b})")
+    print()
+    print("Config ID is displayed on LED during factory reset:")
+    print("  White = 1, Red = 0, LSB first, repeated 5 times")
+    print()
+
+    while True:
+        response = input("Proceed with these changes? [y/N]: ").strip().lower()
+        if response in ('y', 'yes'):
+            return True
+        elif response in ('n', 'no', ''):
+            return False
+        print("Please enter 'y' or 'n'")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Generate Matter pairing configuration for CHIPProjectConfig.h',
@@ -128,6 +166,10 @@ Examples:
                         help='Generate QR code image file (PNG)')
     parser.add_argument('--discovery', type=int, default=2,
                         help='Discovery capabilities bitmask: 1=SoftAP, 2=BLE, 4=OnNetwork (default: 2 for BLE)')
+    parser.add_argument('--config-id', type=int, default=None,
+                        help='Firmware config ID (0-15). Auto-increments if not specified.')
+    parser.add_argument('--no-confirm', action='store_true',
+                        help='Skip confirmation prompt for changes')
 
     args = parser.parse_args()
 
@@ -144,6 +186,42 @@ Examples:
     if args.passcode in INVALID_PASSCODES:
         print(f"Error: Passcode {args.passcode} is in the list of invalid passcodes")
         sys.exit(1)
+
+    # Read current config ID
+    current_config_id = read_current_config_id(args.output) if args.output else 0
+
+    # Determine new config ID
+    if args.config_id is not None:
+        if not 0 <= args.config_id <= 15:
+            print(f"Error: Config ID must be 0-15, got {args.config_id}")
+            sys.exit(1)
+        new_config_id = args.config_id
+    else:
+        new_config_id = (current_config_id + 1) % 16
+
+    # Confirm changes (always required unless --no-confirm)
+    if args.output and not args.no_confirm:
+        # Check if we can prompt for confirmation
+        if not sys.stdin.isatty():
+            print("=" * 60)
+            print("Pairing Configuration Changes")
+            print("=" * 60)
+            print(f"  Discriminator: 0x{args.discriminator:03X} ({args.discriminator})")
+            print(f"  Passcode:      {args.passcode}")
+            print(f"  Config ID:     {current_config_id} -> {new_config_id} (binary: {new_config_id:04b})")
+            print()
+            print("ERROR: Cannot prompt for confirmation in non-interactive mode.")
+            print()
+            print("To generate pairing config, run directly (not via Docker):")
+            print(f"  python3 scripts/generate_pairing_config.py -d {args.discriminator} -p {args.passcode} -o {args.output}")
+            print()
+            print("Or use --no-confirm to skip confirmation (use with caution):")
+            print(f"  make generate-pairing PAIRING_EXTRA_ARGS='--no-confirm'")
+            sys.exit(1)
+
+        if not confirm_changes(current_config_id, new_config_id, args.discriminator, args.passcode):
+            print("Aborted.")
+            sys.exit(0)
 
     # Decode salt
     try:
@@ -195,6 +273,12 @@ Examples:
 #define CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT {args.iterations}
 #define CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_SALT "{args.salt}"
 {verifier_define}
+
+/* Firmware Configuration ID (4-bit, 0-15)
+ * Displayed as binary via LED during factory reset:
+ * White = 1, Red = 0, LSB first, repeated 5 times
+ */
+#define FIRMWARE_CONFIG_ID {new_config_id}
 '''
 
     if args.output:

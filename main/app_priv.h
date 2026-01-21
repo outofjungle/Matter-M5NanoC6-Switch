@@ -47,6 +47,38 @@
 #define LED_RESET_BLINK_START_MS    1000    // Initial blink period at 0% progress
 #define LED_RESET_BLINK_END_MS      200     // Final blink period at 100% progress
 
+// Firmware Config ID Display Configuration
+#define FIRMWARE_CONFIG_ID_BITS             4       // Number of bits to display
+#define FIRMWARE_CONFIG_ID_BIT_DELAY_MS     500     // Delay showing each bit
+#define FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS 1500    // Delay between pattern repetitions
+#define FIRMWARE_CONFIG_ID_REPEAT_COUNT     5       // Number of times to repeat pattern
+#define FIRMWARE_CONFIG_ID_START_DELAY_MS   3000    // Delay before binary display starts
+
+// LED Colors for binary code display
+// Binary 1 = White (reuse identify color)
+#define LED_COLOR_BIT_1_G   LED_COLOR_IDENTIFY_G
+#define LED_COLOR_BIT_1_R   LED_COLOR_IDENTIFY_R
+#define LED_COLOR_BIT_1_B   LED_COLOR_IDENTIFY_B
+
+// Binary 0 = Red (reuse reset color)
+#define LED_COLOR_BIT_0_G   LED_COLOR_RESET_G
+#define LED_COLOR_BIT_0_R   LED_COLOR_RESET_R_MAX
+#define LED_COLOR_BIT_0_B   LED_COLOR_RESET_B
+
+// LED Colors for reset result indicators
+// Green = reset cancelled (button released)
+#define LED_COLOR_CANCEL_R      0
+#define LED_COLOR_CANCEL_G      128
+#define LED_COLOR_CANCEL_B      0
+
+// Red = reset confirmed (button held) - reuse existing
+#define LED_COLOR_CONFIRM_R     LED_COLOR_RESET_R_MAX
+#define LED_COLOR_CONFIRM_G     LED_COLOR_RESET_G
+#define LED_COLOR_CONFIRM_B     LED_COLOR_RESET_B
+
+// Duration to show result indicator
+#define FIRMWARE_CONFIG_ID_RESULT_MS    3000
+
 typedef void *app_driver_handle_t;
 
 /** Initialize the WS2812 LED indicator
@@ -133,3 +165,14 @@ bool app_driver_led_lock(void);
  * Must be called after LED operations are complete.
  */
 void app_driver_led_unlock(void);
+
+/** Get current on/off power state
+ *
+ * Reads the current OnOff attribute value from Matter data model.
+ *
+ * @return true if on, false if off.
+ */
+#ifdef __cplusplus
+extern "C"
+#endif
+bool app_get_current_power_state(void);

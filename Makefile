@@ -129,13 +129,44 @@ shell: ## Open interactive shell in Docker container
 # Pairing
 #------------------------------------------------------------------------------
 
-generate-pairing: ## Generate random pairing code and QR image
-	@$(DOCKER_RUN) sh -c "python3 -c \"import random; \
+generate-pairing: ## Generate random pairing code and QR image (interactive confirmation)
+	@echo "Generating random pairing configuration..."
+	@python3 -c "import random; \
 invalid={0,11111111,22222222,33333333,44444444,55555555,66666666,77777777,88888888,99999999,12345678,87654321}; \
 d=random.randint(0,4095); \
 p=random.randint(1,99999999); \
 exec('while p in invalid: p=random.randint(1,99999999)'); \
-print(f'{d} {p}')\" | xargs -n2 sh -c 'python3 /project/scripts/generate_pairing_config.py -d \$$0 -p \$$1 -o /project/$(PAIRING_CONFIG) --qr-image /project/$(PAIRING_QR_IMAGE)'"
+print(f'{d} {p}')" > /tmp/pairing_values.txt
+	@D=$$(awk '{print $$1}' /tmp/pairing_values.txt); \
+	P=$$(awk '{print $$2}' /tmp/pairing_values.txt); \
+	CURRENT_ID=$$(grep -o 'FIRMWARE_CONFIG_ID [0-9]*' $(PAIRING_CONFIG) 2>/dev/null | awk '{print $$2}' || echo "0"); \
+	NEW_ID=$$((($${CURRENT_ID} + 1) % 16)); \
+	echo "============================================================"; \
+	echo "Pairing Configuration Changes"; \
+	echo "============================================================"; \
+	printf "  Discriminator: 0x%03X (%d)\n" $$D $$D; \
+	echo "  Passcode:      $$P"; \
+	printf "  Config ID:     %d -> %d (binary: " $$CURRENT_ID $$NEW_ID; \
+	python3 -c "print(f'{$$NEW_ID:04b}')"; \
+	echo ")"; \
+	echo ""; \
+	echo "Config ID is displayed on LED during factory reset:"; \
+	echo "  White = 1, Red = 0, LSB first, repeated 5 times"; \
+	echo ""; \
+	read -p "Proceed with these changes? [y/N]: " REPLY; \
+	if [ "$$REPLY" = "y" ] || [ "$$REPLY" = "Y" ]; then \
+		echo "Generating configuration..."; \
+		$(DOCKER_RUN) python3 /project/scripts/generate_pairing_config.py \
+			-d $$D -p $$P \
+			-o /project/$(PAIRING_CONFIG) \
+			--qr-image /project/$(PAIRING_QR_IMAGE) \
+			--no-confirm; \
+	else \
+		echo "Aborted."; \
+		rm -f /tmp/pairing_values.txt; \
+		exit 1; \
+	fi; \
+	rm -f /tmp/pairing_values.txt
 
 #------------------------------------------------------------------------------
 # Help

@@ -6,6 +6,7 @@
 */
 
 #include <atomic>
+#include <driver/gpio.h>
 #include <esp_log.h>
 #include <esp_matter.h>
 #include <freertos/FreeRTOS.h>
@@ -15,147 +16,192 @@
 #include <led_strip.h>
 
 #include "app_priv.h"
+#include "include/CHIPPairingConfig.h"
 
 static const char *TAG = "app_reset";
-
-// Factory reset timing
-#define FACTORY_RESET_HOLD_TIME_MS  20000  // 20 seconds
 
 // Reset state machine
 enum class ResetState : uint8_t {
     IDLE,
-    COUNTDOWN,      // Counting down with slow steady red blink
-    FLASHING,       // Solid red - factory reset in progress (user can release)
+    COUNTDOWN,      // Displaying binary code and performing reset
 };
 
 static TimerHandle_t s_reset_timer = NULL;
-static std::atomic<uint32_t> s_reset_start_time{0};
 static std::atomic<ResetState> s_reset_state{ResetState::IDLE};
-static std::atomic<uint8_t> s_flash_count{0};  // Flash sequence counter
 
-// Set LED color for reset countdown (slow steady red blink)
-static void set_reset_led(uint32_t elapsed_ms)
+// Display a single bit via LED color (LSB first order)
+static void display_bit(bool bit_value)
 {
     if (!app_driver_led_lock()) return;
-
     led_strip_t *strip = app_driver_get_led_strip();
-    if (!strip) {
-        app_driver_led_unlock();
-        return;
+    if (strip) {
+        if (bit_value) {
+            // Binary 1 = White (RGB order)
+            strip->set_pixel(strip, 0, LED_COLOR_BIT_1_R, LED_COLOR_BIT_1_G, LED_COLOR_BIT_1_B);
+        } else {
+            // Binary 0 = Red (RGB order)
+            strip->set_pixel(strip, 0, LED_COLOR_BIT_0_R, LED_COLOR_BIT_0_G, LED_COLOR_BIT_0_B);
+        }
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     }
-
-    // Slow steady blink (no speed change)
-    constexpr uint32_t blink_period = LED_RESET_BLINK_START_MS;
-    bool led_on = ((elapsed_ms / (blink_period / 2)) % 2) == 0;
-
-    if (led_on) {
-        // Solid red at full intensity
-        strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
-    } else {
-        strip->set_pixel(strip, 0, 0, 0, 0);  // Off
-    }
-    strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     app_driver_led_unlock();
 }
 
-// Delay before factory reset (solid red indicator)
-#define RESET_SOLID_DELAY_MS  1000  // 1 second solid red before reset
-
-// Set solid red LED (user can release button now)
-static void set_solid_red_led(void)
+// Turn LED off between bits
+static void led_off(void)
 {
     if (!app_driver_led_lock()) return;
-
     led_strip_t *strip = app_driver_get_led_strip();
-    if (!strip) {
-        app_driver_led_unlock();
-        return;
+    if (strip) {
+        strip->set_pixel(strip, 0, 0, 0, 0);
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     }
-
-    // Solid red - factory reset in progress
-    strip->set_pixel(strip, 0, LED_COLOR_RESET_R_MAX, LED_COLOR_RESET_G, LED_COLOR_RESET_B);  // RGB order: (R, G, B)
-    strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
     app_driver_led_unlock();
 }
 
-// Timer callback for reset countdown and solid red phase
+// Check if button is currently pressed (GPIO low = pressed, active low with pull-up)
+static bool is_button_pressed(void)
+{
+    return gpio_get_level(static_cast<gpio_num_t>(M5NANOC6_BUTTON_GPIO)) == 0;
+}
+
+// Show result indicator (green = cancelled, red = confirmed)
+static void show_result(bool will_reset)
+{
+    if (!app_driver_led_lock()) return;
+    led_strip_t *strip = app_driver_get_led_strip();
+    if (strip) {
+        if (will_reset) {
+            // Red = confirming reset
+            strip->set_pixel(strip, 0, LED_COLOR_CONFIRM_R, LED_COLOR_CONFIRM_G, LED_COLOR_CONFIRM_B);
+        } else {
+            // Green = cancelled
+            strip->set_pixel(strip, 0, LED_COLOR_CANCEL_R, LED_COLOR_CANCEL_G, LED_COLOR_CANCEL_B);
+        }
+        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
+    }
+    app_driver_led_unlock();
+}
+
+// Delay that can be cancelled by button release
+// Returns true if delay completed, false if cancelled
+static bool cancellable_delay(uint32_t delay_ms, uint32_t check_interval_ms = 50)
+{
+    uint32_t elapsed = 0;
+    while (elapsed < delay_ms) {
+        // Check if button was released (state changed from COUNTDOWN)
+        if (s_reset_state.load() != ResetState::COUNTDOWN) {
+            return false;  // Cancelled
+        }
+        uint32_t wait = (delay_ms - elapsed < check_interval_ms)
+                       ? (delay_ms - elapsed) : check_interval_ms;
+        vTaskDelay(pdMS_TO_TICKS(wait));
+        elapsed += wait;
+    }
+    return true;  // Completed
+}
+
+// Display firmware config ID as 4-bit binary code (LSB first)
+// Non-cancellable - always completes the full pattern
+static void display_firmware_config_id(void)
+{
+    uint8_t config_id = FIRMWARE_CONFIG_ID & 0x0F;
+
+    ESP_LOGI(TAG, "Displaying firmware config ID: %d (0b%d%d%d%d, LSB first)",
+             config_id,
+             (config_id >> 3) & 1, (config_id >> 2) & 1,
+             (config_id >> 1) & 1, config_id & 1);
+
+    for (int repeat = 0; repeat < FIRMWARE_CONFIG_ID_REPEAT_COUNT; repeat++) {
+        // Display 4 bits, LSB first (bit 0, 1, 2, 3)
+        for (int bit = 0; bit < FIRMWARE_CONFIG_ID_BITS; bit++) {
+            bool bit_value = (config_id >> bit) & 1;
+            display_bit(bit_value);
+
+            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_BIT_DELAY_MS));
+
+            // Brief off between bits (except after last bit of pattern)
+            if (bit < FIRMWARE_CONFIG_ID_BITS - 1) {
+                led_off();
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        // Delay between patterns (except after last)
+        if (repeat < FIRMWARE_CONFIG_ID_REPEAT_COUNT - 1) {
+            led_off();
+            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS));
+        }
+    }
+
+    ESP_LOGI(TAG, "Firmware config ID display complete");
+}
+
+// Timer callback - no longer used, kept for compatibility
 static void reset_timer_cb(TimerHandle_t timer)
 {
-    ResetState state = s_reset_state.load();
-
-    if (state == ResetState::COUNTDOWN) {
-        // Countdown phase - slow steady blink
-        uint32_t start_time = s_reset_start_time.load();
-        uint32_t elapsed_ms = (xTaskGetTickCount() * portTICK_PERIOD_MS) - start_time;
-
-        set_reset_led(elapsed_ms);
-
-        // Check if countdown complete - transition to solid red phase
-        if (elapsed_ms >= FACTORY_RESET_HOLD_TIME_MS) {
-            ESP_LOGW(TAG, "Factory reset triggered! User can release button.");
-            s_reset_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            s_reset_state = ResetState::FLASHING;
-            set_solid_red_led();  // Solid red - user can release button now
-        }
-    } else if (state == ResetState::FLASHING) {
-        // Solid red phase - wait for delay then perform reset
-        uint32_t start_time = s_reset_start_time.load();
-        uint32_t elapsed_ms = (xTaskGetTickCount() * portTICK_PERIOD_MS) - start_time;
-
-        if (elapsed_ms >= RESET_SOLID_DELAY_MS) {
-            // Delay complete - perform factory reset
-            xTimerStop(s_reset_timer, portMAX_DELAY);
-            s_reset_state = ResetState::IDLE;
-            esp_matter::factory_reset();
-        }
-    }
+    // No-op - reset is now handled directly in button callback
 }
 
 static void button_long_press_start_cb(void *arg, void *data)
 {
-    // Only start if idle (not already in countdown or flashing)
+    // Only start if idle (not already in countdown)
     ResetState expected = ResetState::IDLE;
     if (!s_reset_state.compare_exchange_strong(expected, ResetState::COUNTDOWN)) {
         return;
     }
 
-    ESP_LOGW(TAG, "Hold button for %u seconds to factory reset",
-             static_cast<unsigned>(FACTORY_RESET_HOLD_TIME_MS / 1000));
+    // Save current power state before starting reset sequence
+    bool saved_power_state = app_get_current_power_state();
 
-    s_reset_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    ESP_LOGW(TAG, "Factory reset sequence starting in 3 seconds...");
 
-    // Start timer for LED updates
-    if (s_reset_timer && xTimerStart(s_reset_timer, pdMS_TO_TICKS(100)) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to start reset timer");
+    // Initial delay (3 seconds) - user can still release to cancel
+    if (!cancellable_delay(FIRMWARE_CONFIG_ID_START_DELAY_MS)) {
+        ESP_LOGI(TAG, "Factory reset cancelled during initial delay");
+        app_driver_led_set_power(NULL, saved_power_state);
+        s_reset_state = ResetState::IDLE;
+        return;
+    }
+
+    ESP_LOGW(TAG, "Displaying config ID...");
+
+    // Display binary code sequence (non-cancellable - user can see pairing info)
+    display_firmware_config_id();
+
+    // Check if button is still held by reading GPIO directly
+    // (callback-based state won't work since we're blocking in the same task)
+    bool button_still_held = is_button_pressed();
+
+    if (button_still_held) {
+        ESP_LOGW(TAG, "Button held - reset will proceed in 3 seconds");
+        show_result(true);  // Red
+        vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_RESULT_MS));
+
+        ESP_LOGW(TAG, "Performing factory reset");
+        s_reset_state = ResetState::IDLE;
+        esp_matter::factory_reset();
+    } else {
+        ESP_LOGI(TAG, "Button released - reset cancelled");
+        show_result(false);  // Green
+        vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_RESULT_MS));
+
+        // Restore LED to previous power state
+        app_driver_led_set_power(NULL, saved_power_state);
         s_reset_state = ResetState::IDLE;
     }
 }
 
 static void button_released_cb(void *arg, void *data)
 {
-    // Only cancel if in countdown phase (not if already flashing)
+    // Signal cancellation by changing state from COUNTDOWN to IDLE.
+    // The main callback (button_long_press_start_cb) handles LED restoration.
     ResetState expected = ResetState::COUNTDOWN;
     if (!s_reset_state.compare_exchange_strong(expected, ResetState::IDLE)) {
         return;
     }
 
-    // Stop timer
-    if (s_reset_timer) {
-        xTimerStop(s_reset_timer, pdMS_TO_TICKS(100));
-    }
-
-    uint32_t elapsed_ms = (xTaskGetTickCount() * portTICK_PERIOD_MS) - s_reset_start_time.load();
-    ESP_LOGI(TAG, "Factory reset cancelled after %u ms", static_cast<unsigned>(elapsed_ms));
-
-    // Restore LED state (will be updated by attribute callback)
-    if (app_driver_led_lock()) {
-        led_strip_t *strip = app_driver_get_led_strip();
-        if (strip) {
-            strip->set_pixel(strip, 0, LED_COLOR_OFF_G, LED_COLOR_OFF_R, LED_COLOR_OFF_B);
-            strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
-        }
-        app_driver_led_unlock();
-    }
+    ESP_LOGI(TAG, "Factory reset cancelled (button released)");
 }
 
 extern "C" esp_err_t app_reset_button_register(void *handle)
@@ -195,7 +241,6 @@ extern "C" esp_err_t app_reset_button_register(void *handle)
         return err;
     }
 
-    ESP_LOGI(TAG, "Factory reset handler registered (hold %us)",
-             static_cast<unsigned>(FACTORY_RESET_HOLD_TIME_MS / 1000));
+    ESP_LOGI(TAG, "Factory reset handler registered (long press displays config ID then resets)");
     return ESP_OK;
 }
