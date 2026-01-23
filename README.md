@@ -31,7 +31,7 @@ M5NanoC6 Switch (Node)
 │
 └── Endpoint 1: On/Off Plug-in Unit (0x010A)
     ├── Identify Cluster
-    │   └── Identify command → LED blinks white
+    │   └── Identify command → LED displays binary pattern (2 repetitions)
     ├── Groups Cluster
     ├── Scenes Cluster
     └── On/Off Cluster (server)

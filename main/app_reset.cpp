@@ -29,7 +29,7 @@ enum class ResetState : uint8_t {
 static TimerHandle_t s_reset_timer = NULL;
 static std::atomic<ResetState> s_reset_state{ResetState::IDLE};
 
-// Display a single bit via LED color (LSB first order)
+// Display a single bit via LED color (MSB first order)
 static void display_bit(bool bit_value)
 {
     if (!app_driver_led_lock()) return;
@@ -101,27 +101,27 @@ static bool cancellable_delay(uint32_t delay_ms, uint32_t check_interval_ms = 50
     return true;  // Completed
 }
 
-// Display firmware config ID as 4-bit binary code (LSB first)
+// Display firmware config ID as 4-bit binary code (MSB first)
 // Non-cancellable - always completes the full pattern
 static void display_firmware_config_id(void)
 {
     uint8_t config_id = FIRMWARE_CONFIG_ID & 0x0F;
 
-    ESP_LOGI(TAG, "Displaying firmware config ID: %d (0b%d%d%d%d, LSB first)",
+    ESP_LOGI(TAG, "Displaying firmware config ID: %d (0b%d%d%d%d, MSB first)",
              config_id,
              (config_id >> 3) & 1, (config_id >> 2) & 1,
              (config_id >> 1) & 1, config_id & 1);
 
     for (int repeat = 0; repeat < FIRMWARE_CONFIG_ID_REPEAT_COUNT; repeat++) {
-        // Display 4 bits, LSB first (bit 0, 1, 2, 3)
-        for (int bit = 0; bit < FIRMWARE_CONFIG_ID_BITS; bit++) {
+        // Display 4 bits, MSB first (bit 3, 2, 1, 0)
+        for (int bit = FIRMWARE_CONFIG_ID_BITS - 1; bit >= 0; bit--) {
             bool bit_value = (config_id >> bit) & 1;
             display_bit(bit_value);
 
             vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_BIT_DELAY_MS));
 
             // Brief off between bits (except after last bit of pattern)
-            if (bit < FIRMWARE_CONFIG_ID_BITS - 1) {
+            if (bit > 0) {
                 led_off();
                 vTaskDelay(pdMS_TO_TICKS(50));
             }

@@ -54,6 +54,9 @@
 #define FIRMWARE_CONFIG_ID_REPEAT_COUNT     5       // Number of times to repeat pattern
 #define FIRMWARE_CONFIG_ID_START_DELAY_MS   3000    // Delay before binary display starts
 
+// Identify pattern configuration (repeats config ID binary pattern)
+#define IDENTIFY_CONFIG_ID_REPEAT_COUNT     2       // Repeat pattern twice for identify
+
 // LED Colors for binary code display
 // Binary 1 = White (reuse identify color)
 #define LED_COLOR_BIT_1_G   LED_COLOR_IDENTIFY_G
@@ -124,17 +127,17 @@ esp_err_t app_driver_led_set_power(app_driver_handle_t handle, bool power);
 esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
                                       uint32_t attribute_id, const esp_matter_attr_val_t *val);
 
-/** Start LED identify blink pattern
+/** Start LED identify pattern
  *
- * Blinks the LED to identify the device during commissioning.
+ * Displays firmware config ID as binary pattern to identify the device.
  *
  * @return ESP_OK on success.
  */
 esp_err_t app_driver_led_identify_start(void);
 
-/** Stop LED identify blink pattern
+/** Stop LED identify pattern
  *
- * Stops the blink and restores normal LED state.
+ * Stops the pattern and restores normal LED state.
  *
  * @param[in] current_power Current on/off state to restore.
  *

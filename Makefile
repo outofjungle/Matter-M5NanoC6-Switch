@@ -151,7 +151,7 @@ print(f'{d} {p}')" > /tmp/pairing_values.txt
 	echo ")"; \
 	echo ""; \
 	echo "Config ID is displayed on LED during factory reset:"; \
-	echo "  White = 1, Red = 0, LSB first, repeated 5 times"; \
+	echo "  White = 1, Red = 0, MSB first, repeated 5 times"; \
 	echo ""; \
 	read -p "Proceed with these changes? [y/N]: " REPLY; \
 	if [ "$$REPLY" = "y" ] || [ "$$REPLY" = "Y" ]; then \

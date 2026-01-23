@@ -23,6 +23,6 @@
 
 /* Firmware Configuration ID (4-bit, 0-15)
  * Displayed as binary via LED during factory reset:
- * White = 1, Red = 0, LSB first, repeated 5 times
+ * White = 1, Red = 0, MSB first, repeated 5 times
  */
 #define FIRMWARE_CONFIG_ID 1

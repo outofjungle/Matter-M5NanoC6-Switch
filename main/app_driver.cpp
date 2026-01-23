@@ -23,6 +23,7 @@
 #include <freertos/timers.h>
 
 #include <app_priv.h>
+#include "include/CHIPPairingConfig.h"
 
 using namespace chip::app::Clusters;
 using namespace esp_matter;
@@ -33,6 +34,8 @@ static led_strip_t *s_led_strip = NULL;
 static SemaphoreHandle_t s_led_mutex = NULL;
 static TimerHandle_t s_identify_timer = NULL;
 static std::atomic<bool> s_identify_blink_state{false};
+static std::atomic<bool> s_identify_running{false};
+static TaskHandle_t s_identify_task = NULL;
 
 // Helper macro for LED mutex lock/unlock with timeout
 #define LED_MUTEX_TIMEOUT_MS 50
@@ -182,6 +185,79 @@ esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_
     return err;
 }
 
+// Display a single bit via LED color (MSB first order)
+static void display_identify_bit(bool bit_value)
+{
+    if (!LED_LOCK()) return;
+    if (s_led_strip) {
+        if (bit_value) {
+            // Binary 1 = White (RGB order)
+            s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_BIT_1_R, LED_COLOR_BIT_1_G, LED_COLOR_BIT_1_B);
+        } else {
+            // Binary 0 = Red (RGB order)
+            s_led_strip->set_pixel(s_led_strip, 0, LED_COLOR_BIT_0_R, LED_COLOR_BIT_0_G, LED_COLOR_BIT_0_B);
+        }
+        s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+    }
+    LED_UNLOCK();
+}
+
+// Turn LED off between bits
+static void identify_led_off(void)
+{
+    if (!LED_LOCK()) return;
+    if (s_led_strip) {
+        s_led_strip->set_pixel(s_led_strip, 0, 0, 0, 0);
+        s_led_strip->refresh(s_led_strip, LED_REFRESH_TIMEOUT_MS);
+    }
+    LED_UNLOCK();
+}
+
+// FreeRTOS task for identify pattern (displays config ID binary pattern)
+static void identify_pattern_task(void *pvParameters)
+{
+    uint8_t config_id = FIRMWARE_CONFIG_ID & 0x0F;
+
+    ESP_LOGI(TAG, "Identify pattern: displaying config ID %d (0b%d%d%d%d, MSB first)",
+             config_id,
+             (config_id >> 3) & 1, (config_id >> 2) & 1,
+             (config_id >> 1) & 1, config_id & 1);
+
+    for (int repeat = 0; repeat < IDENTIFY_CONFIG_ID_REPEAT_COUNT; repeat++) {
+        // Display 4 bits, MSB first (bit 3, 2, 1, 0)
+        for (int bit = FIRMWARE_CONFIG_ID_BITS - 1; bit >= 0; bit--) {
+            bool bit_value = (config_id >> bit) & 1;
+            display_identify_bit(bit_value);
+
+            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_BIT_DELAY_MS));
+
+            // Turn off between bits
+            if (bit > 0) {
+                identify_led_off();
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        // Turn off and delay between patterns
+        if (repeat < IDENTIFY_CONFIG_ID_REPEAT_COUNT - 1) {
+            identify_led_off();
+            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS));
+        }
+    }
+
+    // Turn off LED after pattern completes
+    identify_led_off();
+
+    ESP_LOGI(TAG, "Identify pattern complete");
+
+    // Clear running flag and task handle
+    s_identify_running = false;
+    s_identify_task = NULL;
+
+    // Task self-terminates
+    vTaskDelete(NULL);
+}
+
 // Timer callback for identify blink
 static void identify_timer_cb(TimerHandle_t timer)
 {
@@ -203,15 +279,28 @@ static void identify_timer_cb(TimerHandle_t timer)
 
 esp_err_t app_driver_led_identify_start(void)
 {
-    ESP_LOGI(TAG, "Starting identify blink");
+    ESP_LOGI(TAG, "Starting identify pattern");
 
-    if (!s_identify_timer) {
-        ESP_LOGW(TAG, "Identify timer not initialized");
+    // Only start if not already running
+    bool expected = false;
+    if (!s_identify_running.compare_exchange_strong(expected, true)) {
+        ESP_LOGW(TAG, "Identify already running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (xTimerStart(s_identify_timer, pdMS_TO_TICKS(100)) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to start identify timer");
+    // Create task to run the identify pattern
+    BaseType_t result = xTaskCreate(
+        identify_pattern_task,
+        "identify",
+        4096,  // Stack size
+        NULL,  // Parameters
+        5,     // Priority
+        &s_identify_task
+    );
+
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create identify task");
+        s_identify_running = false;
         return ESP_FAIL;
     }
 
@@ -220,11 +309,23 @@ esp_err_t app_driver_led_identify_start(void)
 
 esp_err_t app_driver_led_identify_stop(bool current_power)
 {
-    ESP_LOGI(TAG, "Stopping identify blink");
+    ESP_LOGI(TAG, "Stopping identify pattern");
 
-    if (s_identify_timer) {
-        // Use timeout to ensure command is processed
-        xTimerStop(s_identify_timer, pdMS_TO_TICKS(100));
+    // Signal task to stop
+    s_identify_running = false;
+
+    // Wait for task to terminate (with timeout)
+    if (s_identify_task) {
+        // Wait up to 3 seconds for pattern to complete
+        for (int i = 0; i < 60 && s_identify_task != NULL; i++) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
+        if (s_identify_task) {
+            ESP_LOGW(TAG, "Identify task did not terminate, forcing delete");
+            vTaskDelete(s_identify_task);
+            s_identify_task = NULL;
+        }
     }
 
     // Restore normal LED state

@@ -120,7 +120,7 @@ def confirm_changes(current_id, new_id, discriminator, passcode):
     print(f"  Config ID:     {current_id} -> {new_id} (binary: {new_id:04b})")
     print()
     print("Config ID is displayed on LED during factory reset:")
-    print("  White = 1, Red = 0, LSB first, repeated 5 times")
+    print("  White = 1, Red = 0, MSB first, repeated 5 times")
     print()
 
     while True:
@@ -276,7 +276,7 @@ Examples:
 
 /* Firmware Configuration ID (4-bit, 0-15)
  * Displayed as binary via LED during factory reset:
- * White = 1, Red = 0, LSB first, repeated 5 times
+ * White = 1, Red = 0, MSB first, repeated 5 times
  */
 #define FIRMWARE_CONFIG_ID {new_config_id}
 '''

@@ -121,7 +121,7 @@ When you first power on the device:
 |-----------|---------|
 | **Bright Blue** | Switch is ON |
 | **Dim Blue** | Switch is OFF |
-| **Blinking White** | Identify command (triggered from app) |
+| **White/Red Pattern (2x)** | Identify command - displays firmware config ID (triggered from app) |
 | **White/Red Pattern** | Factory reset binary code display (see [Recovering Your QR Code](#recovering-your-qr-code)) |
 | **Solid Green** | Factory reset cancelled - returning to previous state |
 | **Solid Red** | Factory reset confirmed - resetting device |
@@ -199,19 +199,19 @@ If you've lost your commissioning QR code, you can recover it by reading the bin
 1. **Start the factory reset sequence** (hold button for 3 seconds)
 2. **Watch the LED pattern** for the next ~19 seconds:
    - The pattern repeats **5 times**
-   - Each pattern shows **4 bits** in **LSB-first order** (bit 0, 1, 2, 3)
+   - Each pattern shows **4 bits** in **MSB-first order** (bit 3, 2, 1, 0)
    - **WHITE LED** = Binary 1
    - **RED LED** = Binary 0
    - Brief pause between bits, longer pause between repetitions
 
 3. **Decode the pattern**:
 
-   Example: If you see WHITE, RED, RED, RED (repeated 5 times)
-   - Bit 0 (rightmost): WHITE = 1
-   - Bit 1: RED = 0
-   - Bit 2: RED = 0
+   Example: If you see RED, RED, RED, WHITE (repeated 5 times)
    - Bit 3 (leftmost): RED = 0
-   - Binary: 0b0001 (LSB first: bit 3, bit 2, bit 1, bit 0)
+   - Bit 2: RED = 0
+   - Bit 1: RED = 0
+   - Bit 0 (rightmost): WHITE = 1
+   - Binary: 0b0001 (MSB first: bit 3, bit 2, bit 1, bit 0)
    - Decimal value: 1
 
 4. **Find your QR code**:
@@ -222,13 +222,13 @@ If you've lost your commissioning QR code, you can recover it by reading the bin
 
 ### Binary Pattern Examples
 
-| Pattern (LSB first) | Binary | Decimal | Release Tag |
+| Pattern (MSB first) | Binary | Decimal | Release Tag |
 |---------------------|--------|---------|-------------|
-| WHITE, RED, RED, RED | 0b0001 | 1 | `release-0b0001` |
-| RED, WHITE, RED, RED | 0b0010 | 2 | `release-0b0010` |
-| WHITE, WHITE, RED, RED | 0b0011 | 3 | `release-0b0011` |
-| RED, RED, WHITE, RED | 0b0100 | 4 | `release-0b0100` |
-| WHITE, RED, WHITE, RED | 0b0101 | 5 | `release-0b0101` |
+| RED, RED, RED, WHITE | 0b0001 | 1 | `release-0b0001` |
+| RED, RED, WHITE, RED | 0b0010 | 2 | `release-0b0010` |
+| RED, RED, WHITE, WHITE | 0b0011 | 3 | `release-0b0011` |
+| RED, WHITE, RED, RED | 0b0100 | 4 | `release-0b0100` |
+| RED, WHITE, RED, WHITE | 0b0101 | 5 | `release-0b0101` |
 
 **Tip:** The pattern repeats 5 times - you have multiple chances to observe it. You can release the button after decoding to cancel the reset (LED will show GREEN).
 
