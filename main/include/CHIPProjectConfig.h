@@ -18,7 +18,7 @@
  * Device Information
  * These appear in the Matter fabric and home apps.
  */
-#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_NAME "M5Stack"
+#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_NAME "0x76656E Labs"
 #define CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_NAME "M5NanoC6 Switch"
 
 /*

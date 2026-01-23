@@ -186,7 +186,7 @@ esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_
 }
 
 // Display a single bit via LED color (MSB first order)
-static void display_identify_bit(bool bit_value)
+static void display_config_bit(bool bit_value)
 {
     if (!LED_LOCK()) return;
     if (s_led_strip) {
@@ -203,7 +203,7 @@ static void display_identify_bit(bool bit_value)
 }
 
 // Turn LED off between bits
-static void identify_led_off(void)
+static void config_led_off(void)
 {
     if (!LED_LOCK()) return;
     if (s_led_strip) {
@@ -213,42 +213,48 @@ static void identify_led_off(void)
     LED_UNLOCK();
 }
 
-// FreeRTOS task for identify pattern (displays config ID binary pattern)
-static void identify_pattern_task(void *pvParameters)
+void app_driver_display_config_id_pattern(int repeat_count)
 {
     uint8_t config_id = FIRMWARE_CONFIG_ID & 0x0F;
 
-    ESP_LOGI(TAG, "Identify pattern: displaying config ID %d (0b%d%d%d%d, MSB first)",
+    ESP_LOGI(TAG, "Displaying config ID %d (0b%d%d%d%d, MSB first), %d repetitions",
              config_id,
              (config_id >> 3) & 1, (config_id >> 2) & 1,
-             (config_id >> 1) & 1, config_id & 1);
+             (config_id >> 1) & 1, config_id & 1,
+             repeat_count);
 
-    for (int repeat = 0; repeat < IDENTIFY_CONFIG_ID_REPEAT_COUNT; repeat++) {
+    for (int repeat = 0; repeat < repeat_count; repeat++) {
         // Display 4 bits, MSB first (bit 3, 2, 1, 0)
         for (int bit = FIRMWARE_CONFIG_ID_BITS - 1; bit >= 0; bit--) {
             bool bit_value = (config_id >> bit) & 1;
-            display_identify_bit(bit_value);
+            display_config_bit(bit_value);
 
             vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_BIT_DELAY_MS));
 
             // Turn off between bits
             if (bit > 0) {
-                identify_led_off();
+                config_led_off();
                 vTaskDelay(pdMS_TO_TICKS(50));
             }
         }
 
         // Turn off and delay between patterns
-        if (repeat < IDENTIFY_CONFIG_ID_REPEAT_COUNT - 1) {
-            identify_led_off();
+        if (repeat < repeat_count - 1) {
+            config_led_off();
             vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS));
         }
     }
 
     // Turn off LED after pattern completes
-    identify_led_off();
+    config_led_off();
 
-    ESP_LOGI(TAG, "Identify pattern complete");
+    ESP_LOGI(TAG, "Config ID pattern complete");
+}
+
+// FreeRTOS task for identify pattern (displays config ID binary pattern)
+static void identify_pattern_task(void *pvParameters)
+{
+    app_driver_display_config_id_pattern(IDENTIFY_CONFIG_ID_REPEAT_COUNT);
 
     // Clear running flag and task handle
     s_identify_running = false;

@@ -1,8 +1,8 @@
 /*
    M5NanoC6 Matter Switch - Factory Reset Handler
 
-   Implements 20 second button hold for factory reset with LED countdown.
-   Runtime only - hold button for 20 seconds while device is running.
+   Implements ~23 second button hold for factory reset with LED countdown.
+   Runtime only - hold button for ~23 seconds while device is running.
 */
 
 #include <atomic>
@@ -28,36 +28,6 @@ enum class ResetState : uint8_t {
 
 static TimerHandle_t s_reset_timer = NULL;
 static std::atomic<ResetState> s_reset_state{ResetState::IDLE};
-
-// Display a single bit via LED color (MSB first order)
-static void display_bit(bool bit_value)
-{
-    if (!app_driver_led_lock()) return;
-    led_strip_t *strip = app_driver_get_led_strip();
-    if (strip) {
-        if (bit_value) {
-            // Binary 1 = White (RGB order)
-            strip->set_pixel(strip, 0, LED_COLOR_BIT_1_R, LED_COLOR_BIT_1_G, LED_COLOR_BIT_1_B);
-        } else {
-            // Binary 0 = Red (RGB order)
-            strip->set_pixel(strip, 0, LED_COLOR_BIT_0_R, LED_COLOR_BIT_0_G, LED_COLOR_BIT_0_B);
-        }
-        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
-    }
-    app_driver_led_unlock();
-}
-
-// Turn LED off between bits
-static void led_off(void)
-{
-    if (!app_driver_led_lock()) return;
-    led_strip_t *strip = app_driver_get_led_strip();
-    if (strip) {
-        strip->set_pixel(strip, 0, 0, 0, 0);
-        strip->refresh(strip, LED_REFRESH_TIMEOUT_MS);
-    }
-    app_driver_led_unlock();
-}
 
 // Check if button is currently pressed (GPIO low = pressed, active low with pull-up)
 static bool is_button_pressed(void)
@@ -101,42 +71,6 @@ static bool cancellable_delay(uint32_t delay_ms, uint32_t check_interval_ms = 50
     return true;  // Completed
 }
 
-// Display firmware config ID as 4-bit binary code (MSB first)
-// Non-cancellable - always completes the full pattern
-static void display_firmware_config_id(void)
-{
-    uint8_t config_id = FIRMWARE_CONFIG_ID & 0x0F;
-
-    ESP_LOGI(TAG, "Displaying firmware config ID: %d (0b%d%d%d%d, MSB first)",
-             config_id,
-             (config_id >> 3) & 1, (config_id >> 2) & 1,
-             (config_id >> 1) & 1, config_id & 1);
-
-    for (int repeat = 0; repeat < FIRMWARE_CONFIG_ID_REPEAT_COUNT; repeat++) {
-        // Display 4 bits, MSB first (bit 3, 2, 1, 0)
-        for (int bit = FIRMWARE_CONFIG_ID_BITS - 1; bit >= 0; bit--) {
-            bool bit_value = (config_id >> bit) & 1;
-            display_bit(bit_value);
-
-            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_BIT_DELAY_MS));
-
-            // Brief off between bits (except after last bit of pattern)
-            if (bit > 0) {
-                led_off();
-                vTaskDelay(pdMS_TO_TICKS(50));
-            }
-        }
-
-        // Delay between patterns (except after last)
-        if (repeat < FIRMWARE_CONFIG_ID_REPEAT_COUNT - 1) {
-            led_off();
-            vTaskDelay(pdMS_TO_TICKS(FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS));
-        }
-    }
-
-    ESP_LOGI(TAG, "Firmware config ID display complete");
-}
-
 // Timer callback - no longer used, kept for compatibility
 static void reset_timer_cb(TimerHandle_t timer)
 {
@@ -154,9 +88,9 @@ static void button_long_press_start_cb(void *arg, void *data)
     // Save current power state before starting reset sequence
     bool saved_power_state = app_get_current_power_state();
 
-    ESP_LOGW(TAG, "Factory reset sequence starting in 3 seconds...");
+    ESP_LOGW(TAG, "Factory reset sequence starting in 1 second...");
 
-    // Initial delay (3 seconds) - user can still release to cancel
+    // Initial delay (1 second) - user can still release to cancel
     if (!cancellable_delay(FIRMWARE_CONFIG_ID_START_DELAY_MS)) {
         ESP_LOGI(TAG, "Factory reset cancelled during initial delay");
         app_driver_led_set_power(NULL, saved_power_state);
@@ -167,7 +101,7 @@ static void button_long_press_start_cb(void *arg, void *data)
     ESP_LOGW(TAG, "Displaying config ID...");
 
     // Display binary code sequence (non-cancellable - user can see pairing info)
-    display_firmware_config_id();
+    app_driver_display_config_id_pattern(FIRMWARE_CONFIG_ID_REPEAT_COUNT);
 
     // Check if button is still held by reading GPIO directly
     // (callback-based state won't work since we're blocking in the same task)

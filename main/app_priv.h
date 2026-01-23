@@ -52,7 +52,7 @@
 #define FIRMWARE_CONFIG_ID_BIT_DELAY_MS     500     // Delay showing each bit
 #define FIRMWARE_CONFIG_ID_PATTERN_DELAY_MS 1500    // Delay between pattern repetitions
 #define FIRMWARE_CONFIG_ID_REPEAT_COUNT     5       // Number of times to repeat pattern
-#define FIRMWARE_CONFIG_ID_START_DELAY_MS   3000    // Delay before binary display starts
+#define FIRMWARE_CONFIG_ID_START_DELAY_MS   1000    // Delay before binary display starts
 
 // Identify pattern configuration (repeats config ID binary pattern)
 #define IDENTIFY_CONFIG_ID_REPEAT_COUNT     2       // Repeat pattern twice for identify
@@ -168,6 +168,15 @@ bool app_driver_led_lock(void);
  * Must be called after LED operations are complete.
  */
 void app_driver_led_unlock(void);
+
+/** Display firmware config ID as binary pattern on LED
+ *
+ * Displays 4-bit config ID as white (1) and red (0) LEDs, MSB first.
+ * Blocks until pattern completes.
+ *
+ * @param[in] repeat_count Number of times to repeat the pattern.
+ */
+void app_driver_display_config_id_pattern(int repeat_count);
 
 /** Get current on/off power state
  *

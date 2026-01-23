@@ -113,7 +113,7 @@ When you first power on the device:
 **Press once**: Toggle between ON and OFF
 - The LED will change brightness to reflect the new state
 
-**Hold for 20 seconds**: Factory reset (see below)
+**Hold for ~23 seconds**: Factory reset (see below)
 
 ### LED Indicator
 
@@ -143,7 +143,7 @@ If you need to remove the device from your home or start over:
 ### Performing a Factory Reset
 
 1. **Press and hold the button**
-2. **Wait 3 seconds** (initial delay - you can release to cancel during this time)
+2. **Wait 1 second** (initial delay - you can release to cancel during this time)
 3. **Binary pattern displays** (~19 seconds)
    - The LED will blink white (1) and red (0) showing the firmware configuration
    - This pattern helps you recover your QR code later (see [Recovering Your QR Code](#recovering-your-qr-code))
@@ -154,13 +154,13 @@ If you need to remove the device from your home or start over:
 5. If RED, device resets and restarts automatically
 6. Device will be ready for commissioning again
 
-**Total time: ~25 seconds** (3s delay + 19s pattern + 3s indicator)
+**Total time: ~23 seconds** (1s delay + 19s pattern + 3s indicator)
 
 ### Cancelling a Factory Reset
 
 You can cancel the factory reset at two points:
 
-- **During initial 3-second delay**: Release the button to cancel immediately
+- **During initial 1-second delay**: Release the button to cancel immediately
 - **After binary pattern completes**: Release the button before the pattern ends
   - LED will show **solid GREEN** for 3 seconds
   - LED returns to previous state (bright blue if ON, dim blue if OFF)
@@ -196,7 +196,7 @@ If you've lost your commissioning QR code, you can recover it by reading the bin
 
 ### How to Read the Binary Pattern
 
-1. **Start the factory reset sequence** (hold button for 3 seconds)
+1. **Start the factory reset sequence** (hold button for 1 second)
 2. **Watch the LED pattern** for the next ~19 seconds:
    - The pattern repeats **5 times**
    - Each pattern shows **4 bits** in **MSB-first order** (bit 3, 2, 1, 0)
@@ -291,7 +291,7 @@ For issues or questions:
 ---
 
 **Device Information:**
-- Vendor: M5Stack
+- Vendor: 0x76656E Labs
 - Product: M5NanoC6 Switch
 - Vendor ID: 0xFFF1
 - Product ID: 0x8000
