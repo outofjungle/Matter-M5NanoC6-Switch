@@ -16,8 +16,6 @@ This comprehensive guide covers building Matter switch devices on ESP32-C6 using
 > - Generate unique pairing codes per device
 > - Enable secure boot and flash encryption
 > - Disable all debug interfaces
->
-> See [PRODUCTION-SECURITY-CHECKLIST.md](PRODUCTION-SECURITY-CHECKLIST.md) for complete hardening requirements.
 
 ---
 

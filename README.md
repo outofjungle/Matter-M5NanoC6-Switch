@@ -129,8 +129,6 @@ M5NanoC6 Switch (Node)
 > 2. Use production Device Attestation Certificates (DAC)
 > 3. Enable secure boot and flash encryption
 > 4. Disable debug interfaces (Matter Shell, JTAG)
->
-> See [docs/PRODUCTION-SECURITY-CHECKLIST.md](docs/PRODUCTION-SECURITY-CHECKLIST.md) for complete production hardening requirements.
 
 ### How It Works
 
