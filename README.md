@@ -2,10 +2,71 @@
 
 ESP32-C6 Matter-enabled switch using esp-matter SDK with WiFi or Thread networking.
 
-## User Guides
+## User Guide
 
-- **[WiFi Commissioning Guide](docs/COMMISSIONING-WIFI.md)** - Commission device over WiFi
-- **[Thread Commissioning Guide](docs/COMMISSIONING-THREAD.md)** - Commission device over Thread
+- **[USER-GUIDE.md](USER-GUIDE.md)** - Complete guide for device owners (commissioning, usage, troubleshooting)
+
+## Security Considerations
+
+> **⚠️ DEVELOPMENT ONLY - NOT FOR PRODUCTION USE**
+
+### For End Users
+
+This device uses **test-only credentials** and is **NOT secure for production use**:
+- Uses publicly known test Vendor ID (0xFFF1)
+- No flash encryption (credentials readable from device)
+- Debug interfaces enabled
+- Test pairing codes are public knowledge
+
+**Suitable for:**
+- Personal development and testing
+- Learning Matter/Thread/WiFi protocols
+- Prototyping and experimentation
+
+**NOT suitable for:**
+- Production deployment
+- Controlling critical infrastructure
+- Processing sensitive data
+- Use in untrusted environments
+
+### Before Commissioning
+
+Before adding this device to your network:
+- **Network Exposure**: Once commissioned, the device joins your WiFi or Thread network and can communicate with other devices
+- **Test Credentials**: Anyone with physical access can extract secrets from the device
+- **No Encryption**: Flash memory is not encrypted - device secrets are readable with basic tools
+- **Personal Use Only**: Only commission this device on networks you fully control
+- **Bluetooth Range**: During commissioning, the device broadcasts via BLE - ensure you're in a trusted environment
+
+**Recommended:**
+- Commission in a private location (not public spaces)
+- Use a dedicated test/development network
+- Do not use this device to control sensitive systems
+
+### Factory Reset Security Notes
+
+Factory reset **removes** these items:
+- Matter fabric credentials and access control
+- Thread or WiFi network credentials
+- Commissioning state
+
+Factory reset **does NOT remove**:
+- Device attestation certificates (DAC)
+- Factory configuration
+- Application firmware
+- **Secrets stored in flash memory** (not encrypted)
+
+**Important:** Because this device does not use flash encryption, anyone with physical access and basic tools can read secrets from the device memory even after factory reset. If transferring ownership or disposing of the device, consider the flash contents as potentially readable.
+
+### Thread Border Router Security (Thread builds)
+
+If using Thread:
+- Ensure your Border Router is from a trusted manufacturer
+- Keep Border Router firmware up to date
+- Use a secure WiFi network (WPA3 or WPA2 with strong password)
+- Thread Border Router acts as gateway between Thread network and your home network
+- Compromised Border Router can expose your entire Thread mesh network
+- Do not use untrusted or unofficial Border Router firmware
 
 ## Features
 
@@ -14,7 +75,7 @@ ESP32-C6 Matter-enabled switch using esp-matter SDK with WiFi or Thread networki
 - **LED Indicator**: WS2812 LED shows state (bright blue=ON, dim blue=OFF)
 - **Factory Reset**: Hold button 20 seconds to reset, LED shows protocol-specific pattern
   - **Thread**: White (1) / Red (0) binary pattern
-  - **WiFi**: Blue (1) / Purple (0) binary pattern
+  - **WiFi**: Purple (1) / Blue (0) binary pattern
 - **Configurable Pairing**: Generate unique QR codes per device
 - **Dual Network Support**: Build for WiFi or Thread with `make build-wifi` or `make build-thread`
 
@@ -265,12 +326,163 @@ make build && make flash  # or: make build-wifi && make flash
 
 ### 2. Commission Your Device
 
-Choose the guide for your build:
+For end-user commissioning instructions, see **[USER-GUIDE.md](USER-GUIDE.md)**.
 
-- **[WiFi Commissioning Guide](docs/COMMISSIONING-WIFI.md)** - Step-by-step WiFi commissioning
-- **[Thread Commissioning Guide](docs/COMMISSIONING-THREAD.md)** - Step-by-step Thread commissioning
+For developers, the sections below provide detailed monitoring and debugging information.
 
-Both protocols use BLE for initial commissioning. The device is discoverable via Bluetooth during the commissioning window.
+### Monitoring During Commissioning
+
+Monitor the device during commissioning to see connection progress:
+
+```bash
+make monitor
+```
+
+Press `Ctrl+]` to exit the monitor.
+
+#### Expected Log Sequence (Thread)
+
+```
+I (1755) chip[DL]: CHIPoBLE advertising started
+I (1785) app_main: Commissioning window opened
+
+# After commissioning starts...
+I (XXXX) chip[DL]: OpenThread started
+
+# After Thread credentials received...
+I (XXXX) OPENTHREAD: [N] Mle-----------: Role disabled -> detached
+I (XXXX) OPENTHREAD: [N] Mle-----------: Attach attempt 1
+I (XXXX) OPENTHREAD: [N] Mle-----------: Role detached -> child
+
+# After joining Thread network...
+I (XXXX) OPENTHREAD: [N] Mle-----------: Partition ID 0xXXXXXXXX
+I (XXXX) chip[DL]: Thread network joined
+
+# Commission complete
+I (XXXX) chip[SVR]: Commissioning completed successfully
+```
+
+**Thread Role Progression:**
+- **disabled** → **detached** → **child** → (potentially **router** if needed)
+
+A "child" role is normal and sufficient for most end devices.
+
+#### Expected Log Sequence (WiFi)
+
+```
+I (1685) app_main: WiFi not provisioned - AP mode active for commissioning
+I (1755) chip[DL]: CHIPoBLE advertising started
+I (1785) app_main: Commissioning window opened
+
+# After commissioning starts...
+I (XXXX) chip[DL]: WIFI_EVENT_STA_START
+I (XXXX) chip[DL]: Done driving station state...
+
+# After WiFi credentials received...
+I (XXXX) wifi:new:<6,0>, old:<1,1>
+I (XXXX) wifi:station: connected to YourSSID
+I (XXXX) wifi:station: got ip
+
+# Commission complete
+I (XXXX) chip[SVR]: Commissioning completed successfully
+```
+
+### Advanced: chip-tool Commissioning
+
+For developers who want to use chip-tool instead of consumer apps:
+
+#### Installation
+
+```bash
+# Clone connectedhomeip
+git clone https://github.com/project-chip/connectedhomeip.git
+cd connectedhomeip
+
+# Build chip-tool
+./scripts/examples/gn_build_example.sh examples/chip-tool out/chip-tool
+```
+
+#### Thread Commissioning with chip-tool
+
+```bash
+# Get Thread operational dataset from your Thread Border Router
+# Apple Home: Home app → Home Settings → Thread Network → Export
+# ESP TBR: dataset active -x
+
+# Format: chip-tool pairing ble-thread <node-id> hex:<dataset> <setup-pin> <discriminator>
+./out/chip-tool/chip-tool pairing ble-thread 1 \
+  hex:0e080000000000010000000300001235060004001fffe00208fedcba9876543210 \
+  5143243 1568
+
+# Parameters:
+#   1              - Node ID (assign any unique ID)
+#   hex:<dataset>  - Thread operational dataset in hex
+#   5143243        - Setup PIN from CHIPPairingConfig.h
+#   1568           - Discriminator from CHIPPairingConfig.h (0x620)
+```
+
+#### WiFi Commissioning with chip-tool
+
+```bash
+# Format: chip-tool pairing ble-wifi <node-id> <ssid> <password> <setup-pin> <discriminator>
+./out/chip-tool/chip-tool pairing ble-wifi 1 "YourSSID" "YourPassword" 5143243 1568
+
+# Parameters:
+#   1           - Node ID (assign any unique ID)
+#   YourSSID    - Your WiFi network name
+#   YourPassword - Your WiFi password
+#   5143243     - Setup PIN from CHIPPairingConfig.h
+#   1568        - Discriminator from CHIPPairingConfig.h (0x620)
+```
+
+#### Controlling with chip-tool
+
+```bash
+# Read OnOff attribute
+./out/chip-tool/chip-tool onoff read on-off 1 1
+
+# Toggle the switch
+./out/chip-tool/chip-tool onoff toggle 1 1
+
+# Turn on
+./out/chip-tool/chip-tool onoff on 1 1
+
+# Turn off
+./out/chip-tool/chip-tool onoff off 1 1
+```
+
+#### Thread Network Diagnostics
+
+```bash
+# Read Thread diagnostic info
+./out/chip-tool/chip-tool threadnetworkdiagnostics read routing-role 1 1
+./out/chip-tool/chip-tool threadnetworkdiagnostics read network-name 1 1
+```
+
+### Finding Pairing Info
+
+**View in serial monitor:**
+```bash
+make monitor
+```
+
+Look for:
+```
+I (1695) app_main: === Commissioning Info ===
+I (1695) app_main: Discriminator: 1568 (0x620)
+I (1705) app_main: Passcode: 5143243
+```
+
+**View in source code:**
+```bash
+cat main/include/CHIPPairingConfig.h
+```
+
+**View QR code:**
+```bash
+open pairing_qr.png  # macOS
+xdg-open pairing_qr.png  # Linux
+```
 
 ## Project Structure
 

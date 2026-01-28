@@ -1,5 +1,7 @@
 # Thread Commissioning Guide
 
+> **ℹ️ Notice:** For end users, please see **[USER-GUIDE.md](../USER-GUIDE.md)** which includes commissioning instructions for both WiFi and Thread builds in a user-friendly format. This document contains developer-specific information and command-line usage.
+
 Step-by-step instructions for commissioning the M5NanoC6 Switch over Thread.
 
 ## Prerequisites
@@ -15,7 +17,7 @@ Step-by-step instructions for commissioning the M5NanoC6 Switch over Thread.
   - Apple Home app (iOS 16.1+ / iPadOS 16.1+)
   - Google Home app
   - chip-tool (command-line)
-- **QR Code**: Generated pairing QR code (`pairing_qr.png`)
+- **QR Code**: Generated pairing QR code ([`pairing_qr.png`](../pairing_qr.png))
 
 ## What is Thread?
 
@@ -59,7 +61,7 @@ Thread is a low-power mesh networking protocol designed for smart home devices. 
 
 5. **Choose commissioning method:**
    - **QR Code** (recommended):
-     - Point camera at `pairing_qr.png`
+     - Point camera at [`pairing_qr.png`](../pairing_qr.png)
      - Tap the notification when the code is recognized
 
    - **Manual Code Entry**:
@@ -116,7 +118,7 @@ Thread is a low-power mesh networking protocol designed for smart home devices. 
 5. **Select your home** (or create one)
 
 6. **Choose commissioning method:**
-   - **Scan QR code**: Point camera at `pairing_qr.png`
+   - **Scan QR code**: Point camera at [`pairing_qr.png`](../pairing_qr.png)
    - **Manual entry**: Enter pairing code when prompted
 
 7. **Grant permissions** when requested:
@@ -377,6 +379,9 @@ cat main/include/CHIPPairingConfig.h
 
 **View QR Code:**
 
+![Pairing QR Code](../pairing_qr.png)
+
+Or from terminal:
 ```bash
 open pairing_qr.png  # macOS
 xdg-open pairing_qr.png  # Linux

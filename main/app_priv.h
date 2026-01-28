@@ -69,13 +69,13 @@
     #define LED_COLOR_BIT_0_R   LED_COLOR_RESET_R_MAX
     #define LED_COLOR_BIT_0_B   LED_COLOR_RESET_B
 #else
-    // WiFi: Blue=1, Purple=0
+    // WiFi: Purple=1, Blue=0
     #define LED_COLOR_BIT_1_G   0
-    #define LED_COLOR_BIT_1_R   0
-    #define LED_COLOR_BIT_1_B   128
+    #define LED_COLOR_BIT_1_R   80
+    #define LED_COLOR_BIT_1_B   80
     #define LED_COLOR_BIT_0_G   0
-    #define LED_COLOR_BIT_0_R   80
-    #define LED_COLOR_BIT_0_B   80
+    #define LED_COLOR_BIT_0_R   0
+    #define LED_COLOR_BIT_0_B   128
 #endif
 
 // LED Colors for reset result indicators

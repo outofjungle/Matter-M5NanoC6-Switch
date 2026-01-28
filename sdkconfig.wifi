@@ -32,10 +32,8 @@ CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n
 # Disable OpenThread (WiFi-only device)
 CONFIG_OPENTHREAD_ENABLED=n
 
-# Enable WiFi
+# Enable WiFi (station mode only - AP managed by SDK during commissioning)
 CONFIG_ENABLE_WIFI_STATION=y
-CONFIG_ENABLE_WIFI_AP=y
-CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
 
 # LwIP config
 CONFIG_LWIP_IPV6_AUTOCONFIG=n

@@ -1,5 +1,7 @@
 # WiFi Commissioning Guide
 
+> **ℹ️ Notice:** For end users, please see **[USER-GUIDE.md](../USER-GUIDE.md)** which includes commissioning instructions for both WiFi and Thread builds in a user-friendly format. This document contains developer-specific information and command-line usage.
+
 Step-by-step instructions for commissioning the M5NanoC6 Switch over WiFi.
 
 ## Prerequisites
@@ -10,7 +12,7 @@ Step-by-step instructions for commissioning the M5NanoC6 Switch over WiFi.
   - Google Home app
   - chip-tool (command-line)
 - **Home WiFi Network**: 2.4GHz WiFi network credentials
-- **QR Code**: Generated pairing QR code (`pairing_qr.png`)
+- **QR Code**: Generated pairing QR code ([`pairing_qr.png`](../pairing_qr.png))
 
 ## Important: WiFi vs Manual Connection
 
@@ -47,7 +49,7 @@ The AP you see in your WiFi list is used during this process, but you don't manu
 
 4. **Choose commissioning method:**
    - **QR Code** (recommended):
-     - Point camera at `pairing_qr.png`
+     - Point camera at [`pairing_qr.png`](../pairing_qr.png)
      - Tap the notification when the code is recognized
 
    - **Manual Code Entry**:
@@ -103,7 +105,7 @@ The AP you see in your WiFi list is used during this process, but you don't manu
 4. **Select your home** (or create one)
 
 5. **Choose commissioning method:**
-   - **Scan QR code**: Point camera at `pairing_qr.png`
+   - **Scan QR code**: Point camera at [`pairing_qr.png`](../pairing_qr.png)
    - **Manual entry**: Enter pairing code when prompted
 
 6. **Grant permissions** when requested:
@@ -214,8 +216,8 @@ I (XXXX) chip[SVR]: Commissioning completed successfully
 
 When you factory reset the device (hold button 20+ seconds), the LED displays the firmware config ID in **binary**:
 
-- **Blue** = Binary 1
-- **Purple** = Binary 0
+- **Purple** = Binary 1
+- **Blue** = Binary 0
 - Pattern repeats 5 times, MSB first
 
 This helps you recover the correct QR code if you have multiple devices.
@@ -290,6 +292,9 @@ cat main/include/CHIPPairingConfig.h
 
 **View QR Code:**
 
+![Pairing QR Code](../pairing_qr.png)
+
+Or from terminal:
 ```bash
 open pairing_qr.png  # macOS
 xdg-open pairing_qr.png  # Linux
