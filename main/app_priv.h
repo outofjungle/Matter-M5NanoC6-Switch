@@ -11,6 +11,7 @@
 
 #include <esp_err.h>
 #include <esp_matter.h>
+#include "include/CHIPProjectConfig.h"
 
 // M5NanoC6 GPIO Configuration
 #define M5NANOC6_BUTTON_GPIO        9
@@ -58,15 +59,24 @@
 #define IDENTIFY_CONFIG_ID_REPEAT_COUNT     2       // Repeat pattern twice for identify
 
 // LED Colors for binary code display
-// Binary 1 = White (reuse identify color)
-#define LED_COLOR_BIT_1_G   LED_COLOR_IDENTIFY_G
-#define LED_COLOR_BIT_1_R   LED_COLOR_IDENTIFY_R
-#define LED_COLOR_BIT_1_B   LED_COLOR_IDENTIFY_B
-
-// Binary 0 = Red (reuse reset color)
-#define LED_COLOR_BIT_0_G   LED_COLOR_RESET_G
-#define LED_COLOR_BIT_0_R   LED_COLOR_RESET_R_MAX
-#define LED_COLOR_BIT_0_B   LED_COLOR_RESET_B
+// Protocol-dependent: Thread vs WiFi
+#if CHIP_DEVICE_CONFIG_ENABLE_THREAD
+    // Thread: White=1, Red=0
+    #define LED_COLOR_BIT_1_G   LED_COLOR_IDENTIFY_G
+    #define LED_COLOR_BIT_1_R   LED_COLOR_IDENTIFY_R
+    #define LED_COLOR_BIT_1_B   LED_COLOR_IDENTIFY_B
+    #define LED_COLOR_BIT_0_G   LED_COLOR_RESET_G
+    #define LED_COLOR_BIT_0_R   LED_COLOR_RESET_R_MAX
+    #define LED_COLOR_BIT_0_B   LED_COLOR_RESET_B
+#else
+    // WiFi: Blue=1, Purple=0
+    #define LED_COLOR_BIT_1_G   0
+    #define LED_COLOR_BIT_1_R   0
+    #define LED_COLOR_BIT_1_B   128
+    #define LED_COLOR_BIT_0_G   0
+    #define LED_COLOR_BIT_0_R   80
+    #define LED_COLOR_BIT_0_B   80
+#endif
 
 // LED Colors for reset result indicators
 // Green = reset cancelled (button released)

@@ -1,16 +1,24 @@
 # Matter M5NanoC6 Switch
 
-ESP32-C6 Matter-enabled switch using esp-matter SDK with Thread networking.
+ESP32-C6 Matter-enabled switch using esp-matter SDK with WiFi or Thread networking.
+
+## User Guides
+
+- **[WiFi Commissioning Guide](docs/COMMISSIONING-WIFI.md)** - Commission device over WiFi
+- **[Thread Commissioning Guide](docs/COMMISSIONING-THREAD.md)** - Commission device over Thread
 
 ## Features
 
 - **Toggle Control**: Button press toggles ON/OFF state
 - **Matter Integration**: State syncs with Matter fabric
 - **LED Indicator**: WS2812 LED shows state (bright blue=ON, dim blue=OFF)
-- **Factory Reset**: Hold button 20 seconds to reset
+- **Factory Reset**: Hold button 20 seconds to reset, LED shows protocol-specific pattern
+  - **Thread**: White (1) / Red (0) binary pattern
+  - **WiFi**: Blue (1) / Purple (0) binary pattern
 - **Configurable Pairing**: Generate unique QR codes per device
+- **Dual Network Support**: Build for WiFi or Thread with `make build-wifi` or `make build-thread`
 
-**Matter Device Type**: On/Off Plug-in Unit (0x010A) over Thread
+**Matter Device Type**: On/Off Plug-in Unit (0x010A) over WiFi or Thread
 
 ## Matter Device Model
 
@@ -156,22 +164,41 @@ sudo usermod -aG dialout $USER
 Build firmware in Docker, flash/monitor with host tools:
 
 ```bash
-make build      # Build firmware in Docker
+make build      # Build firmware in Docker (Thread, default)
 make flash      # Flash to device with host esptool
 make monitor    # Serial monitor with logging (Ctrl+] to exit)
+```
+
+### WiFi vs Thread Builds
+
+Choose your network protocol at build time:
+
+```bash
+# Thread (default)
+make build              # or: make build-thread
+
+# WiFi
+make build-wifi
+
+# IMPORTANT: Run fullclean when switching protocols
+make fullclean && make build-wifi
 ```
 
 ### All Make Targets
 
 ```bash
 # Build (Docker - default)
-make build            # Build firmware in Docker
+make build            # Build firmware in Docker (Thread, default)
+make build-thread     # Build Thread firmware explicitly
+make build-wifi       # Build WiFi firmware
 make clean            # Clean build artifacts
 make rebuild          # Full clean + rebuild
 make menuconfig       # SDK configuration (interactive)
 
 # Build (Local - requires ESP-IDF installation)
-make local-build      # Build firmware locally
+make local-build      # Build firmware locally (Thread, default)
+make local-build-thread # Build Thread firmware locally
+make local-build-wifi # Build WiFi firmware locally
 make local-clean      # Clean build artifacts locally
 make local-rebuild    # Full clean + rebuild locally
 make local-menuconfig # SDK configuration locally
@@ -221,7 +248,7 @@ idf.py -C /project size
 
 ## Commissioning
 
-Generate a unique pairing code:
+### 1. Generate Pairing Code
 
 ```bash
 make generate-pairing
@@ -233,10 +260,17 @@ This creates:
 
 Rebuild after generating:
 ```bash
-make build && make flash
+make build && make flash  # or: make build-wifi && make flash
 ```
 
-The device is discoverable via BLE during commissioning.
+### 2. Commission Your Device
+
+Choose the guide for your build:
+
+- **[WiFi Commissioning Guide](docs/COMMISSIONING-WIFI.md)** - Step-by-step WiFi commissioning
+- **[Thread Commissioning Guide](docs/COMMISSIONING-THREAD.md)** - Step-by-step Thread commissioning
+
+Both protocols use BLE for initial commissioning. The device is discoverable via Bluetooth during the commissioning window.
 
 ## Project Structure
 

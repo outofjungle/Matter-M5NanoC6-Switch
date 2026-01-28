@@ -10,9 +10,9 @@
 # Flash & Monitor (host tools):
 #   make flash, make erase, make monitor
 
-.PHONY: all build clean fullclean rebuild flash monitor erase \
+.PHONY: all build build-thread build-wifi clean fullclean rebuild flash monitor erase \
         menuconfig generate-pairing shell image-build help \
-        local-build local-clean local-rebuild local-menuconfig \
+        local-build local-build-thread local-build-wifi local-clean local-rebuild local-menuconfig \
         image-pull image-status
 
 # Default target
@@ -60,8 +60,15 @@ image-status: ## Show Docker image info
 # because the ESP-IDF activation script may change the working directory.
 # The -C flag explicitly tells idf.py where to find our project's CMakeLists.txt.
 
-build: ## Build firmware in Docker container
-	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) build
+build: build-thread  ## Build firmware (Thread, default)
+
+build-thread: ## Build Thread firmware in Docker
+	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) \
+		-D SDKCONFIG_DEFAULTS=/project/sdkconfig.defaults build
+
+build-wifi: ## Build WiFi firmware in Docker
+	$(DOCKER_RUN) idf.py -C /project -D IDF_TARGET=$(TARGET) \
+		-D SDKCONFIG_DEFAULTS=/project/sdkconfig.wifi build
 
 clean: ## Clean build artifacts in Docker
 	$(DOCKER_RUN) idf.py fullclean
@@ -75,8 +82,13 @@ menuconfig: ## Open SDK configuration in Docker (interactive)
 # Local Build (requires local ESP-IDF installation)
 #------------------------------------------------------------------------------
 
-local-build: ## Build firmware locally with installed ESP-IDF
-	idf.py -D IDF_TARGET=$(TARGET) build
+local-build: local-build-thread  ## Build locally (Thread, default)
+
+local-build-thread: ## Build Thread firmware locally
+	idf.py -D IDF_TARGET=$(TARGET) -D SDKCONFIG_DEFAULTS=sdkconfig.defaults build
+
+local-build-wifi: ## Build WiFi firmware locally
+	idf.py -D IDF_TARGET=$(TARGET) -D SDKCONFIG_DEFAULTS=sdkconfig.wifi build
 
 local-clean: ## Clean build artifacts locally
 	idf.py fullclean
@@ -98,6 +110,11 @@ flash: ## Flash firmware to device using host esptool
 monitor: ## Serial monitor with logging (esp-idf-monitor: Ctrl+], screen: Ctrl+A K)
 	@test -n "$(PORT)" || (echo "Error: No device found. Set PORT=<device>" && exit 1)
 	@mkdir -p $(LOGS_DIR)
+	@if [ -n "$$(ls -A $(LOGS_DIR)/*.log 2>/dev/null)" ]; then \
+		mkdir -p $(LOGS_DIR).bak; \
+		echo "Backing up existing logs to $(LOGS_DIR).bak/"; \
+		mv $(LOGS_DIR)/*.log $(LOGS_DIR).bak/ 2>/dev/null || true; \
+	fi
 	@echo "Logging to $(LOG_FILE)"
 	@if command -v esp-idf-monitor >/dev/null 2>&1; then \
 		echo "Using esp-idf-monitor (Ctrl+] to exit)"; \
@@ -176,13 +193,17 @@ help: ## Show this help
 	@echo "Matter M5NanoC6 Switch - Docker Build Environment"
 	@echo ""
 	@echo "DOCKER BUILD (default):"
-	@echo "  make build           Build firmware in Docker"
+	@echo "  make build           Build firmware in Docker (Thread, default)"
+	@echo "  make build-thread    Build Thread firmware in Docker"
+	@echo "  make build-wifi      Build WiFi firmware in Docker"
 	@echo "  make clean           Clean build artifacts"
 	@echo "  make rebuild         Full clean + rebuild"
 	@echo "  make menuconfig      Open SDK configuration (interactive)"
 	@echo ""
 	@echo "LOCAL BUILD (requires ESP-IDF installation):"
-	@echo "  make local-build     Build firmware locally"
+	@echo "  make local-build     Build firmware locally (Thread, default)"
+	@echo "  make local-build-thread Build Thread firmware locally"
+	@echo "  make local-build-wifi Build WiFi firmware locally"
 	@echo "  make local-clean     Clean build artifacts locally"
 	@echo "  make local-rebuild   Full clean + rebuild locally"
 	@echo "  make local-menuconfig Open SDK configuration locally"
@@ -201,6 +222,8 @@ help: ## Show this help
 	@echo "UTILITIES:"
 	@echo "  make fullclean       Full clean (build, sdkconfig, deps)"
 	@echo "  make generate-pairing Generate random pairing code and QR"
+	@echo ""
+	@echo "IMPORTANT: Run 'make fullclean' when switching between Thread/WiFi builds"
 	@echo ""
 	@echo "Current PORT: $(PORT)"
 	@echo ""

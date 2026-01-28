@@ -20,6 +20,10 @@
 #include <app_priv.h>
 #include "app_reset.h"
 
+#if !CHIP_DEVICE_CONFIG_ENABLE_THREAD
+#include <esp_wifi.h>
+#endif
+
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #include <platform/ESP32/OpenthreadLauncher.h>
 
@@ -265,6 +269,13 @@ extern "C" void app_main()
     // Start Matter
     err = esp_matter::start(app_event_cb);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
+
+#if !CHIP_DEVICE_CONFIG_ENABLE_THREAD
+    // Log WiFi provisioning status
+    if (!chip::DeviceLayer::ConnectivityMgr().IsWiFiStationProvisioned()) {
+        ESP_LOGI(TAG, "WiFi not provisioned - AP mode active for commissioning");
+    }
+#endif
 
     const esp_app_desc_t *app_desc = esp_app_get_description();
     ESP_LOGI(TAG, "M5NanoC6 Matter Switch v%s started", app_desc->version);
