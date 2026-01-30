@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: m5nanoc6-switch:latest
+    image: esp-matter-dev:latest
 
     volumes:
       # Mount project source code (includes build directory)

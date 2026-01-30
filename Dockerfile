@@ -1,5 +1,8 @@
 # ESP-IDF Docker Image for Matter Development
-# Minimal image - ESP-Matter is mounted from host
+#
+# SHARED IMAGE: This Dockerfile is used by multiple ESP-Matter projects
+# Image name: esp-matter-dev:latest
+# All projects using this base configuration share the same image to save disk space
 
 FROM espressif/esp-matter:release-v1.5_idf_v5.4.1
 
